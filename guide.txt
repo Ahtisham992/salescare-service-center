@@ -1,0 +1,373 @@
+# SalesCare Service Center - Complete Project Guide
+
+## 📁 Project Structure
+
+```
+salescare-service-center/
+│
+├── backend/
+│   ├── config/
+│   │   ├── database.js          # PostgreSQL connection
+│   │   ├── env.js                # Environment variables
+│   │   └── constants.js          # App constants
+│   │
+│   ├── middleware/
+│   │   ├── auth.js               # JWT authentication
+│   │   ├── validation.js         # Request validation
+│   │   ├── errorHandler.js       # Global error handling
+│   │   └── logger.js             # Request logging
+│   │
+│   ├── models/
+│   │   ├── User.js
+│   │   ├── Customer.js
+│   │   ├── Complaint.js
+│   │   ├── Invoice.js
+│   │   ├── Inventory.js
+│   │   ├── PurchaseOrder.js
+│   │   ├── MaterialRequisition.js
+│   │   └── DeliveryOrder.js
+│   │
+│   ├── controllers/
+│   │   ├── authController.js
+│   │   ├── complaintController.js
+│   │   ├── invoiceController.js
+│   │   ├── inventoryController.js
+│   │   ├── purchaseController.js
+│   │   ├── requisitionController.js
+│   │   └── reportController.js
+│   │
+│   ├── routes/
+│   │   ├── auth.routes.js
+│   │   ├── complaint.routes.js
+│   │   ├── invoice.routes.js
+│   │   ├── inventory.routes.js
+│   │   ├── purchase.routes.js
+│   │   └── requisition.routes.js
+│   │
+│   ├── services/
+│   │   ├── inventoryService.js   # Inventory management logic
+│   │   ├── invoiceService.js     # Invoice generation
+│   │   ├── notificationService.js
+│   │   └── pdfService.js         # PDF generation for invoices
+│   │
+│   ├── utils/
+│   │   ├── autoNumber.js         # Auto-generate numbers
+│   │   ├── validators.js
+│   │   └── helpers.js
+│   │
+│   ├── scripts/
+│   │   ├── seed.js               # Database seeding
+│   │   └── migrate.js            # Migration scripts
+│   │
+│   ├── .env
+│   ├── package.json
+│   └── server.js
+│
+├── frontend/
+│   ├── public/
+│   │   ├── index.html
+│   │   └── favicon.ico
+│   │
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── common/
+│   │   │   │   ├── Navbar.jsx
+│   │   │   │   ├── Sidebar.jsx
+│   │   │   │   ├── DataTable.jsx
+│   │   │   │   ├── Modal.jsx
+│   │   │   │   ├── FormInput.jsx
+│   │   │   │   └── LoadingSpinner.jsx
+│   │   │   │
+│   │   │   ├── complaints/
+│   │   │   │   ├── ComplaintList.jsx
+│   │   │   │   ├── ComplaintForm.jsx
+│   │   │   │   ├── ComplaintDetail.jsx
+│   │   │   │   └── AssignTechnician.jsx
+│   │   │   │
+│   │   │   ├── invoices/
+│   │   │   │   ├── InvoiceList.jsx
+│   │   │   │   ├── InvoiceForm.jsx
+│   │   │   │   ├── InvoicePreview.jsx
+│   │   │   │   └── CounterSaleInvoice.jsx
+│   │   │   │
+│   │   │   ├── inventory/
+│   │   │   │   ├── StockList.jsx
+│   │   │   │   ├── PurchaseOrderForm.jsx
+│   │   │   │   ├── GoodsReceiptForm.jsx
+│   │   │   │   └── StockReport.jsx
+│   │   │   │
+│   │   │   ├── requisitions/
+│   │   │   │   ├── MRQSForm.jsx
+│   │   │   │   ├── MRTSForm.jsx
+│   │   │   │   └── RequisitionList.jsx
+│   │   │   │
+│   │   │   └── dashboard/
+│   │   │       ├── DashboardStats.jsx
+│   │   │       ├── ComplaintChart.jsx
+│   │   │       └── RevenueChart.jsx
+│   │   │
+│   │   ├── pages/
+│   │   │   ├── Login.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── Complaints.jsx
+│   │   │   ├── Invoices.jsx
+│   │   │   ├── Inventory.jsx
+│   │   │   ├── Reports.jsx
+│   │   │   └── Settings.jsx
+│   │   │
+│   │   ├── services/
+│   │   │   ├── api.js            # Axios instance
+│   │   │   ├── authService.js
+│   │   │   ├── complaintService.js
+│   │   │   ├── invoiceService.js
+│   │   │   └── inventoryService.js
+│   │   │
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── AppContext.jsx
+│   │   │
+│   │   ├── utils/
+│   │   │   ├── formatters.js
+│   │   │   └── validators.js
+│   │   │
+│   │   ├── App.jsx
+│   │   ├── index.js
+│   │   └── index.css
+│   │
+│   ├── package.json
+│   └── tailwind.config.js
+│
+└── README.md
+```
+
+---
+
+## 🚀 Setup Instructions
+
+### 1. Backend Setup
+
+```bash
+# Navigate to backend
+cd backend
+
+# Install dependencies
+npm init -y
+npm install express pg dotenv bcryptjs jsonwebtoken cors helmet morgan
+npm install --save-dev nodemon
+
+# Development dependencies
+npm install joi express-validator pdfkit
+```
+
+### 2. Frontend Setup
+
+```bash
+# Navigate to frontend
+cd frontend
+
+# Create React app
+npx create-react-app .
+
+# Install dependencies
+npm install react-router-dom axios
+npm install @tanstack/react-query
+npm install react-hook-form
+npm install tailwindcss postcss autoprefixer
+npm install lucide-react
+npm install date-fns
+npm install react-hot-toast
+
+# Initialize Tailwind
+npx tailwindcss init -p
+```
+
+### 3. Environment Variables
+
+Create `.env` in backend:
+
+```env
+# Server
+PORT=5000
+NODE_ENV=development
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=salescare_db
+DB_USER=postgres
+DB_PASSWORD=your_password
+
+# JWT
+JWT_SECRET=your_super_secret_key_change_in_production
+JWT_EXPIRE=7d
+
+# App
+COMPANY_NAME=SalesCare Service Center
+DEFAULT_AREA=Rawalpindi, PEL Service Center
+```
+
+---
+
+## 📋 Key API Endpoints
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
+- `GET /api/auth/me` - Get current user
+
+### Complaints
+- `GET /api/complaints` - List all complaints
+- `POST /api/complaints` - Create complaint
+- `GET /api/complaints/:id` - Get complaint details
+- `PUT /api/complaints/:id` - Update complaint
+- `PATCH /api/complaints/:id/assign` - Assign technician
+- `PATCH /api/complaints/:id/status` - Update status
+
+### Invoices
+- `GET /api/invoices` - List invoices
+- `POST /api/invoices/counter-sale` - Create counter sale invoice
+- `POST /api/invoices/complaint` - Create complaint invoice
+- `GET /api/invoices/:id/pdf` - Generate invoice PDF
+- `GET /api/invoices/:id` - Get invoice details
+
+### Inventory
+- `GET /api/inventory/stock` - Get stock in hand
+- `GET /api/inventory/transactions` - Transaction history
+- `POST /api/purchase-orders` - Create PO
+- `POST /api/goods-receipts` - Create GR
+- `POST /api/delivery-orders` - Create DO
+
+### Material Requisitions
+- `POST /api/requisitions/mrqs` - Create MRQS
+- `POST /api/requisitions/mrts` - Create MRTS
+- `GET /api/requisitions/:id` - Get requisition details
+- `PATCH /api/requisitions/:id/approve` - Approve requisition
+- `PATCH /api/requisitions/:id/issue` - Issue materials
+
+### Reports
+- `GET /api/reports/complaints-summary` - Complaint summary
+- `GET /api/reports/revenue` - Revenue report
+- `GET /api/reports/inventory-valuation` - Inventory value
+- `GET /api/reports/technician-performance` - Technician stats
+
+---
+
+## 🔄 Business Logic Flow
+
+### 1. **Complaint to Invoice Flow**
+```
+Customer → Complaint Created → Technician Assigned → 
+MRQS Generated → Parts Issued → Service Completed → 
+Invoice Generated (Service Charges + Parts)
+```
+
+### 2. **Counter Sale Flow**
+```
+Customer Walk-in → Delivery Order Created → 
+Inventory Deducted → Invoice Generated
+```
+
+### 3. **Inventory Flow**
+```
+Purchase Order → Goods Receipt → Inventory Updated →
+MRQS/DO Issue → Inventory Deducted → Transaction Logged
+```
+
+---
+
+## 🎯 Key Features to Implement
+
+### Phase 1 (Core Features)
+1. ✅ User authentication & authorization
+2. ✅ Complaint registration & management
+3. ✅ Basic inventory tracking
+4. ✅ Invoice generation (both types)
+5. ✅ Material requisition system
+
+### Phase 2 (Advanced Features)
+6. 🔄 Dashboard with analytics
+7. 🔄 PDF invoice generation
+8. 🔄 Advanced reporting
+9. 🔄 Email/SMS notifications
+10. 🔄 Hierarchical approval workflow
+
+### Phase 3 (Optimization)
+11. 🔄 Mobile responsive design
+12. 🔄 Real-time updates (Socket.io)
+13. 🔄 Export to Excel
+14. 🔄 Audit trail
+15. 🔄 Role-based permissions
+
+---
+
+## 💡 Important Implementation Notes
+
+### Auto-Number Generation
+All document numbers (Invoice#, Complaint#, DO#, MRQS#) should be auto-generated with format:
+- Format: `PREFIX-YYYY-NNNNNN`
+- Example: `RWP-2024-002878`, `MRQS-2024-000123`
+
+### Inventory Management
+- Use **transactions** for all inventory movements
+- Log every change in `inventory_transactions`
+- Implement **optimistic locking** to prevent race conditions
+- Calculate stock in real-time from transactions
+
+### Invoice Calculations
+- Service charges from tariff table
+- Parts amount from MRQS
+- GST/FST calculations
+- Discount & waive-off logic
+- Round to 2 decimal places
+
+### Warranty Logic
+- Check warranty status based on purchase date
+- Different pricing for UW/OPB/Con W/Con P
+- Auto-calculate warranty expiry
+
+---
+
+## 🔐 Security Considerations
+
+1. **Authentication**: JWT tokens with expiry
+2. **Authorization**: Role-based access control
+3. **Input Validation**: Sanitize all inputs
+4. **SQL Injection**: Use parameterized queries
+5. **Password**: Hash with bcrypt (salt rounds: 10)
+6. **CORS**: Restrict to frontend domain only
+7. **Rate Limiting**: Prevent API abuse
+8. **Audit Trail**: Log all critical operations
+
+---
+
+## 📊 Database Indexes & Performance
+
+Already included in schema:
+- Indexes on foreign keys
+- Indexes on frequently queried fields
+- Composite indexes for complex queries
+- Use `EXPLAIN ANALYZE` to optimize slow queries
+
+---
+
+## 🧪 Testing Strategy
+
+1. **Unit Tests**: Test individual functions
+2. **Integration Tests**: Test API endpoints
+3. **E2E Tests**: Test complete workflows
+4. **Manual Testing**: UI/UX testing
+
+Tools: Jest, Supertest, React Testing Library
+
+---
+
+## 📱 Next Steps
+
+1. **Set up database** (Run SQL schema)
+2. **Build authentication system** first
+3. **Create complaint module** (most critical)
+4. **Implement inventory management**
+5. **Add invoice generation**
+6. **Build dashboard & reports**
+
+Would you like me to create sample code for any specific module?

@@ -1,0 +1,381 @@
+-- SALESCARE SERVICE CENTER DATABASE SCHEMA
+
+-- ============================================
+-- MASTER DATA TABLES
+-- ============================================
+
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    role VARCHAR(20) CHECK (role IN ('admin', 'technician', 'receptionist', 'manager')),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE customers (
+    customer_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    alternate_phone VARCHAR(20),
+    address TEXT,
+    cnic VARCHAR(20),
+    email VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE vendors (
+    vendor_id SERIAL PRIMARY KEY,
+    vendor_code VARCHAR(50) UNIQUE NOT NULL,
+    vendor_name VARCHAR(100) NOT NULL,
+    vendor_type VARCHAR(20) CHECK (vendor_type IN ('LPR', 'Vendor')),
+    contact_person VARCHAR(100),
+    phone VARCHAR(20),
+    email VARCHAR(100),
+    address TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE operational_areas (
+    area_id SERIAL PRIMARY KEY,
+    area_name VARCHAR(100) NOT NULL,
+    area_code VARCHAR(20) UNIQUE NOT NULL,
+    is_active BOOLEAN DEFAULT true
+);
+
+-- ============================================
+-- PRODUCT & INVENTORY TABLES
+-- ============================================
+
+CREATE TABLE products (
+    product_id SERIAL PRIMARY KEY,
+    product_name VARCHAR(100) NOT NULL,
+    product_code VARCHAR(50) UNIQUE NOT NULL,
+    category VARCHAR(50),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE service_tariffs (
+    tariff_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES products(product_id),
+    visit_charges_24h DECIMAL(10,2) DEFAULT 0,
+    visit_charges_48h DECIMAL(10,2) DEFAULT 0,
+    gas_charges DECIMAL(10,2) DEFAULT 0,
+    inspection_charges_csc DECIMAL(10,2) DEFAULT 0,
+    washing_charges DECIMAL(10,2) DEFAULT 0,
+    transport_charges_per_km DECIMAL(10,2) DEFAULT 0,
+    dismantling_charges DECIMAL(10,2) DEFAULT 0,
+    reinstallation_charges DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE items (
+    item_id SERIAL PRIMARY KEY,
+    item_code VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(50),
+    unit_price DECIMAL(10,2) DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE inventory (
+    inventory_id SERIAL PRIMARY KEY,
+    item_id INTEGER REFERENCES items(item_id),
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    quantity_in_hand INTEGER DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(item_id, area_id)
+);
+
+-- ============================================
+-- PURCHASE & GOODS RECEIPT
+-- ============================================
+
+CREATE TABLE purchase_orders (
+    po_id SERIAL PRIMARY KEY,
+    po_number VARCHAR(50) UNIQUE NOT NULL,
+    vendor_id INTEGER REFERENCES vendors(vendor_id),
+    po_date DATE NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('pending', 'approved', 'received', 'cancelled')) DEFAULT 'pending',
+    total_amount DECIMAL(12,2),
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE po_items (
+    po_item_id SERIAL PRIMARY KEY,
+    po_id INTEGER REFERENCES purchase_orders(po_id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(item_id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('FOC', 'OPB', 'Normal')) DEFAULT 'Normal',
+    amount DECIMAL(10,2) GENERATED ALWAYS AS (quantity * unit_price) STORED
+);
+
+CREATE TABLE goods_receipts (
+    gr_id SERIAL PRIMARY KEY,
+    gr_number VARCHAR(50) UNIQUE NOT NULL,
+    po_id INTEGER REFERENCES purchase_orders(po_id),
+    gr_date DATE NOT NULL,
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    received_by INTEGER REFERENCES users(user_id),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE gr_items (
+    gr_item_id SERIAL PRIMARY KEY,
+    gr_id INTEGER REFERENCES goods_receipts(gr_id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(item_id),
+    quantity_received INTEGER NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL
+);
+
+-- ============================================
+-- COMPLAINTS & SERVICE MANAGEMENT
+-- ============================================
+
+CREATE TABLE complaints (
+    complaint_id SERIAL PRIMARY KEY,
+    complaint_number VARCHAR(50) UNIQUE NOT NULL,
+    customer_id INTEGER REFERENCES customers(customer_id),
+    product_id INTEGER REFERENCES products(product_id),
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    complaint_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Product/Warranty Details
+    serial_number VARCHAR(100),
+    warranty_status VARCHAR(20) CHECK (warranty_status IN ('In Warranty', 'Out of Warranty', 'Contract Warranty', 'Contract Paid')),
+    purchase_date DATE,
+    
+    -- Service Details
+    complaint_type VARCHAR(50),
+    complaint_description TEXT,
+    assigned_technician INTEGER REFERENCES users(user_id),
+    priority VARCHAR(20) CHECK (priority IN ('Low', 'Medium', 'High', 'Critical')) DEFAULT 'Medium',
+    
+    -- Status Tracking
+    status VARCHAR(20) CHECK (status IN ('Open', 'Assigned', 'In Progress', 'On Hold', 'Completed', 'Cancelled')) DEFAULT 'Open',
+    
+    -- Service Charges
+    service_tariff_id INTEGER REFERENCES service_tariffs(tariff_id),
+    selected_service_charge DECIMAL(10,2),
+    parts_amount DECIMAL(10,2) DEFAULT 0,
+    total_service_amount DECIMAL(10,2) DEFAULT 0,
+    
+    -- Dates
+    scheduled_date DATE,
+    completion_date DATE,
+    
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- MATERIAL REQUISITION & RETURNS
+-- ============================================
+
+CREATE TABLE material_requisitions (
+    mrqs_id SERIAL PRIMARY KEY,
+    mrqs_number VARCHAR(50) UNIQUE NOT NULL,
+    complaint_id INTEGER REFERENCES complaints(complaint_id),
+    technician_id INTEGER REFERENCES users(user_id),
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    mrqs_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(20) CHECK (status IN ('Pending', 'Approved', 'Issued', 'Rejected')) DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE mrqs_items (
+    mrqs_item_id SERIAL PRIMARY KEY,
+    mrqs_id INTEGER REFERENCES material_requisitions(mrqs_id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(item_id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2),
+    item_status VARCHAR(20) CHECK (item_status IN ('UW', 'OPB', 'Con W', 'Con P')) DEFAULT 'UW',
+    amount DECIMAL(10,2)
+);
+
+CREATE TABLE material_returns (
+    mrts_id SERIAL PRIMARY KEY,
+    mrts_number VARCHAR(50) UNIQUE NOT NULL,
+    complaint_id INTEGER REFERENCES complaints(complaint_id),
+    technician_id INTEGER REFERENCES users(user_id),
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    mrts_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE mrts_items (
+    mrts_item_id SERIAL PRIMARY KEY,
+    mrts_id INTEGER REFERENCES material_returns(mrts_id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(item_id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2),
+    item_status VARCHAR(20) CHECK (item_status IN ('UW', 'OPB', 'Con W', 'Con P')),
+    amount DECIMAL(10,2)
+);
+
+-- ============================================
+-- COUNTER SALES & DELIVERY ORDERS
+-- ============================================
+
+CREATE TABLE delivery_orders (
+    do_id SERIAL PRIMARY KEY,
+    do_number VARCHAR(50) UNIQUE NOT NULL,
+    customer_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    address TEXT,
+    cnic VARCHAR(20),
+    do_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    total_amount DECIMAL(12,2),
+    status VARCHAR(20) CHECK (status IN ('Pending', 'Delivered', 'Cancelled')) DEFAULT 'Pending',
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE do_items (
+    do_item_id SERIAL PRIMARY KEY,
+    do_id INTEGER REFERENCES delivery_orders(do_id) ON DELETE CASCADE,
+    item_id INTEGER REFERENCES items(item_id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    gst_percentage DECIMAL(5,2) DEFAULT 0,
+    gst_amount DECIMAL(10,2),
+    line_total DECIMAL(10,2)
+);
+
+-- ============================================
+-- INVOICING
+-- ============================================
+
+CREATE TABLE invoices (
+    invoice_id SERIAL PRIMARY KEY,
+    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+    invoice_type VARCHAR(20) CHECK (invoice_type IN ('Counter Sale', 'Complaint Service')) NOT NULL,
+    
+    -- References
+    complaint_id INTEGER REFERENCES complaints(complaint_id),
+    do_id INTEGER REFERENCES delivery_orders(do_id),
+    customer_id INTEGER REFERENCES customers(customer_id),
+    
+    -- Customer Info (for counter sales)
+    customer_name VARCHAR(100),
+    phone VARCHAR(20),
+    address TEXT,
+    cnic VARCHAR(20),
+    
+    -- Financial
+    invoice_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    job_number VARCHAR(50),
+    sales_tax_reg VARCHAR(50),
+    customer_order_number VARCHAR(50),
+    customer_order_date DATE,
+    
+    -- Area
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    
+    -- Amounts
+    subtotal DECIMAL(12,2),
+    gst_total DECIMAL(12,2),
+    fst_total DECIMAL(12,2),
+    discount DECIMAL(12,2) DEFAULT 0,
+    net_amount DECIMAL(12,2),
+    waive_off DECIMAL(12,2) DEFAULT 0,
+    
+    -- Payment
+    payment_terms VARCHAR(100),
+    dispatch_mode VARCHAR(50),
+    
+    -- Status
+    status VARCHAR(20) CHECK (status IN ('Draft', 'Issued', 'Paid', 'Cancelled')) DEFAULT 'Draft',
+    is_co BOOLEAN DEFAULT false,
+    
+    created_by INTEGER REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE invoice_items (
+    invoice_item_id SERIAL PRIMARY KEY,
+    invoice_id INTEGER REFERENCES invoices(invoice_id) ON DELETE CASCADE,
+    item_type VARCHAR(20) CHECK (item_type IN ('SER', 'PRD')) NOT NULL,
+    description TEXT NOT NULL,
+    quantity DECIMAL(10,2) NOT NULL,
+    rate_per_unit DECIMAL(10,2) NOT NULL,
+    amount DECIMAL(12,2),
+    gst_percentage DECIMAL(5,2) DEFAULT 0,
+    gst_amount DECIMAL(12,2),
+    fst_percentage DECIMAL(5,2) DEFAULT 0,
+    fst_amount DECIMAL(12,2),
+    discount DECIMAL(10,2) DEFAULT 0,
+    net_amount DECIMAL(12,2),
+    waive_off DECIMAL(12,2) DEFAULT 0
+);
+
+-- ============================================
+-- INVENTORY TRANSACTIONS LOG
+-- ============================================
+
+CREATE TABLE inventory_transactions (
+    transaction_id SERIAL PRIMARY KEY,
+    item_id INTEGER REFERENCES items(item_id),
+    area_id INTEGER REFERENCES operational_areas(area_id),
+    transaction_type VARCHAR(30) CHECK (transaction_type IN ('GR', 'MRQS_ISSUE', 'MRTS_RETURN', 'DO_ISSUE', 'ADJUSTMENT')),
+    reference_id INTEGER, -- ID of GR, MRQS, MRTS, or DO
+    reference_number VARCHAR(50),
+    quantity_change INTEGER NOT NULL, -- positive for IN, negative for OUT
+    quantity_before INTEGER,
+    quantity_after INTEGER,
+    unit_price DECIMAL(10,2),
+    transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    performed_by INTEGER REFERENCES users(user_id),
+    notes TEXT
+);
+
+-- ============================================
+-- INDEXES FOR PERFORMANCE
+-- ============================================
+
+CREATE INDEX idx_complaints_customer ON complaints(customer_id);
+CREATE INDEX idx_complaints_status ON complaints(status);
+CREATE INDEX idx_complaints_technician ON complaints(assigned_technician);
+CREATE INDEX idx_complaints_date ON complaints(complaint_date);
+CREATE INDEX idx_inventory_item ON inventory(item_id);
+CREATE INDEX idx_inventory_area ON inventory(area_id);
+CREATE INDEX idx_invoices_date ON invoices(invoice_date);
+CREATE INDEX idx_invoices_complaint ON invoices(complaint_id);
+CREATE INDEX idx_inv_transactions_item ON inventory_transactions(item_id);
+CREATE INDEX idx_inv_transactions_date ON inventory_transactions(transaction_date);
+
+-- ============================================
+-- TRIGGERS FOR AUTO-UPDATE
+-- ============================================
+
+-- Update timestamp trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON customers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_complaints_updated_at BEFORE UPDATE ON complaints
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
