@@ -89,13 +89,12 @@ const generateMRTSNumber = async () => {
 };
 
 /**
- * Generate unique invoice number
- * Format: INV-YYYY-NNNNNN
- * Example: INV-2025-000001
+ * Generate unique invoice number (will be prefixed with area code later)
+ * Format: YYYY-NNNNNN
+ * Example: 2025-000001 (area code added in controller)
  */
 const generateInvoiceNumber = async () => {
   const year = new Date().getFullYear();
-  const prefix = `INV-${year}`;
 
   const result = await query(`
     SELECT invoice_number 
@@ -103,18 +102,21 @@ const generateInvoiceNumber = async () => {
     WHERE invoice_number LIKE $1 
     ORDER BY invoice_number DESC 
     LIMIT 1
-  `, [`${prefix}-%`]);
+  `, [`%-${year}-%`]);
 
   let nextNumber = 1;
 
   if (result.rows.length > 0) {
     const lastNumber = result.rows[0].invoice_number;
-    const lastSeq = parseInt(lastNumber.split('-')[2]);
-    nextNumber = lastSeq + 1;
+    const parts = lastNumber.split('-');
+    if (parts.length === 3) {
+      const lastSeq = parseInt(parts[2]);
+      nextNumber = lastSeq + 1;
+    }
   }
 
   const paddedNumber = String(nextNumber).padStart(6, '0');
-  return `${prefix}-${paddedNumber}`;
+  return `${year}-${paddedNumber}`;
 };
 
 /**
