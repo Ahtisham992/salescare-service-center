@@ -1,10 +1,21 @@
+// ============================================
 // backend/routes/customer.routes.js
+// ============================================
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate: auth2 } = require('../middleware/auth');
+const {
+  getAllCustomers,
+  getCustomerById,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer
+} = require('../controllers/customerController');
 
-router.get('/', authenticate, async (req, res) => {
-  res.json({ success: true, message: 'Customer routes - Coming soon' });
-});
+router.get('/', auth2, getAllCustomers);
+router.get('/:id', auth2, getCustomerById);
+router.post('/', auth2, createCustomer);
+router.put('/:id', auth2, updateCustomer);
+router.delete('/:id', auth2, deleteCustomer);
 
 module.exports = router;
