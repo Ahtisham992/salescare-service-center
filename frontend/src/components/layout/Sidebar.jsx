@@ -65,7 +65,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-gray-900 bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-gray-900 bg-opacity-50 z-40 lg:hidden"
           onClick={closeSidebar}
         ></div>
       )}
@@ -73,31 +73,36 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       {/* Sidebar */}
       <aside
         className={`
-          fixed top-0 left-0 z-30 h-full w-64 bg-white border-r border-gray-200
+          fixed lg:static inset-y-0 left-0 z-50
+          w-64 bg-white border-r border-gray-200
           transform transition-transform duration-300 ease-in-out
-          lg:translate-x-0 lg:static lg:z-auto
+          lg:translate-x-0 flex-shrink-0
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 lg:hidden">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">SC</span>
+          {/* Sidebar Header - Desktop Logo */}
+          <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">SC</span>
               </div>
-              <span className="text-lg font-bold text-gray-900">SalesCare</span>
+              <div className="hidden lg:block">
+                <h1 className="text-lg font-bold text-gray-900">SalesCare</h1>
+                <p className="text-xs text-gray-500">Service Center</p>
+              </div>
             </div>
+            {/* Close button - Mobile only */}
             <button
               onClick={closeSidebar}
-              className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* User Info - Mobile Only */}
-          <div className="px-6 py-4 border-b border-gray-200 lg:hidden">
+          <div className="px-6 py-4 border-b border-gray-200 lg:hidden flex-shrink-0">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">
@@ -112,7 +117,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 overflow-y-auto scrollbar-thin">
+          <nav className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="space-y-1">
               {filteredNavigation.map((item) => (
                 <NavLink
@@ -130,13 +135,13 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                   {({ isActive }) => (
                     <>
                       <item.icon
-                        className={`w-5 h-5 mr-3 transition-colors ${
+                        className={`w-5 h-5 mr-3 transition-colors flex-shrink-0 ${
                           isActive ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-600'
                         }`}
                       />
                       <span className="flex-1">{item.name}</span>
                       {isActive && (
-                        <ChevronRight className="w-4 h-4 text-primary-600" />
+                        <ChevronRight className="w-4 h-4 text-primary-600 flex-shrink-0" />
                       )}
                     </>
                   )}
@@ -146,7 +151,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
           </nav>
 
           {/* Sidebar Footer */}
-          <div className="px-6 py-4 border-t border-gray-200">
+          <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
             <div className="text-xs text-gray-500 text-center">
               <p>© 2026 SalesCare</p>
               <p className="mt-1">Version 1.0.0</p>

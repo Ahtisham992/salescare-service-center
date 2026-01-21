@@ -16,16 +16,17 @@ const MainLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navbar */}
-      <Navbar toggleSidebar={toggleSidebar} />
-
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Sidebar - Fixed on left for desktop, overlay for mobile */}
       <Sidebar isOpen={sidebarOpen} closeSidebar={closeSidebar} />
 
-      {/* Main Content */}
-      <div className="lg:pl-64 pt-16">
-        <main className="min-h-[calc(100vh-4rem)]">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Navbar - Fixed at top */}
+        <Navbar toggleSidebar={toggleSidebar} />
+
+        {/* Page Content - Scrollable */}
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
