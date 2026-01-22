@@ -1,11 +1,14 @@
-// frontend/src/pages/Invoices.jsx - COMPLETE VERSION
+// frontend/src/pages/Invoices.jsx - COMPLETE VERSION WITH ALL MODALS
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import invoiceService from '../services/invoiceService';
 import { useAuth } from '../context/AuthContext';
 import DataTable from '../components/common/DataTable';
 import Modal, { ModalFooter } from '../components/common/Modal';
-import toast from 'react-hot-toast';
+import CreateComplaintInvoiceModal from '../components/invoices/CreateComplaintInvoiceModal';
+import CreateCounterSaleInvoiceModal from '../components/invoices/CreateCounterSaleInvoiceModal';
+import InvoiceViewModal from '../components/invoices/InvoiceViewModal';
+import { toast } from 'react-hot-toast';
 import { 
   Plus, 
   Search, 
@@ -17,7 +20,9 @@ import {
   DollarSign,
   Calendar,
   AlertCircle,
-  FileText
+  FileText,
+  Wrench,
+  ShoppingCart
 } from 'lucide-react';
 import { 
   formatDate, 
@@ -36,9 +41,13 @@ const Invoices = () => {
     status: '',
   });
   const [showFilters, setShowFilters] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  
+  // Modal states
+  const [showInvoiceTypeModal, setShowInvoiceTypeModal] = useState(false);
+  const [showComplaintModal, setShowComplaintModal] = useState(false);
+  const [showCounterSaleModal, setShowCounterSaleModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
 
   // Build query params
   const queryParams = {
@@ -55,9 +64,28 @@ const Invoices = () => {
     queryFn: () => invoiceService.getAll(queryParams),
   });
 
+  // Fetch stats
+  const { data: statsData } = useQuery({
+    queryKey: ['invoice-stats'],
+    queryFn: () => invoiceService.getStats(),
+  });
+
   const handleView = (invoice) => {
-    setSelectedInvoice(invoice);
+    setSelectedInvoiceId(invoice.invoice_id);
     setShowViewModal(true);
+  };
+
+  const handleCreateInvoice = () => {
+    setShowInvoiceTypeModal(true);
+  };
+
+  const handleInvoiceTypeSelect = (type) => {
+    setShowInvoiceTypeModal(false);
+    if (type === 'complaint') {
+      setShowComplaintModal(true);
+    } else if (type === 'counter-sale') {
+      setShowCounterSaleModal(true);
+    }
   };
 
   const handleSearch = (e) => {
@@ -76,6 +104,11 @@ const Invoices = () => {
       status: '',
     });
     setSearchTerm('');
+  };
+
+  const handleInvoiceCreated = () => {
+    setShowComplaintModal(false);
+    setShowCounterSaleModal(false);
   };
 
   // Table columns
@@ -113,6 +146,20 @@ const Invoices = () => {
         }`}>
           {row.invoice_type}
         </span>
+      ),
+    },
+    {
+      header: 'Reference',
+      accessor: 'reference',
+      render: (row) => (
+        <div className="text-sm">
+          {row.complaint_number && (
+            <div className="text-gray-900">C: {row.complaint_number}</div>
+          )}
+          {row.do_number && (
+            <div className="text-gray-900">DO: {row.do_number}</div>
+          )}
+        </div>
       ),
     },
     {
@@ -163,7 +210,7 @@ const Invoices = () => {
             <Eye className="w-4 h-4" />
           </button>
           <button
-            onClick={() => toast.info('PDF download coming soon')}
+            onClick={() => toast('PDF download coming soon', { icon: 'ℹ️' })}
             className="p-2 text-gray-600 hover:bg-gray-50 rounded"
             title="Download PDF"
           >
@@ -176,6 +223,7 @@ const Invoices = () => {
 
   const invoices = data?.data?.invoices || [];
   const pagination = data?.data?.pagination || {};
+  const stats = statsData?.data || {};
 
   return (
     <div className="page-container">
@@ -190,7 +238,7 @@ const Invoices = () => {
         
         {hasRole(['admin', 'manager', 'receptionist']) && (
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleCreateInvoice}
             className="btn btn-primary mt-4 md:mt-0 flex items-center"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -277,7 +325,7 @@ const Invoices = () => {
             <div>
               <p className="text-sm text-gray-600">Total Invoices</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {pagination.total_items || 0}
+                {stats.total_invoices || pagination.total_items || 0}
               </p>
             </div>
             <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -291,9 +339,7 @@ const Invoices = () => {
             <div>
               <p className="text-sm text-gray-600">Total Revenue</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {formatCurrency(
-                  invoices.reduce((sum, inv) => sum + parseFloat(inv.net_amount || 0), 0)
-                )}
+                {formatCurrency(stats.total_revenue || 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
@@ -307,7 +353,10 @@ const Invoices = () => {
             <div>
               <p className="text-sm text-gray-600">Paid</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {invoices.filter(inv => inv.status === 'Paid').length}
+                {stats.paid || invoices.filter(inv => inv.status === 'Paid').length}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {formatCurrency(stats.paid_amount || 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
@@ -321,7 +370,10 @@ const Invoices = () => {
             <div>
               <p className="text-sm text-gray-600">Pending</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {invoices.filter(inv => inv.status === 'Issued').length}
+                {stats.issued || invoices.filter(inv => inv.status === 'Issued').length}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {formatCurrency(stats.pending_amount || 0)}
               </p>
             </div>
             <div className="w-12 h-12 bg-warning-100 rounded-lg flex items-center justify-center">
@@ -350,141 +402,85 @@ const Invoices = () => {
         )}
       </div>
 
-      {/* View Modal */}
-      {showViewModal && selectedInvoice && (
+      {/* Invoice Type Selection Modal */}
+      {showInvoiceTypeModal && (
         <Modal
-          isOpen={showViewModal}
-          onClose={() => {
-            setShowViewModal(false);
-            setSelectedInvoice(null);
-          }}
-          title="Invoice Details"
-          size="lg"
+          isOpen={showInvoiceTypeModal}
+          onClose={() => setShowInvoiceTypeModal(false)}
+          title="Select Invoice Type"
+          size="md"
         >
-          <div className="space-y-6">
-            {/* Invoice Header */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-600">Invoice #</label>
-                <p className="text-lg font-semibold text-gray-900 mt-1">
-                  {selectedInvoice.invoice_number}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => handleInvoiceTypeSelect('complaint')}
+              className="p-6 border-2 border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all group"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-success-200 transition-colors">
+                  <Wrench className="w-8 h-8 text-success-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">Complaint Service</h3>
+                <p className="text-sm text-gray-600">
+                  Create invoice for service complaints with charges and parts
                 </p>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Date</label>
-                <p className="text-gray-900 mt-1">{formatDate(selectedInvoice.invoice_date)}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Type</label>
-                <div className="mt-1">
-                  <span className={`badge ${
-                    selectedInvoice.invoice_type === 'Counter Sale' 
-                      ? 'badge-info' 
-                      : 'badge-success'
-                  }`}>
-                    {selectedInvoice.invoice_type}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Status</label>
-                <div className="mt-1">
-                  <span className={`badge badge-${getStatusColor(selectedInvoice.status)}`}>
-                    {selectedInvoice.status}
-                  </span>
-                </div>
-              </div>
-            </div>
+            </button>
 
-            {/* Customer Info */}
-            <div className="border-t border-gray-200 pt-4">
-              <h4 className="font-semibold text-gray-900 mb-3">Customer Information</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Name</label>
-                  <p className="text-gray-900 mt-1">{selectedInvoice.customer_name}</p>
+            <button
+              onClick={() => handleInvoiceTypeSelect('counter-sale')}
+              className="p-6 border-2 border-gray-200 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-all group"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-info-100 rounded-full flex items-center justify-center mb-3 group-hover:bg-info-200 transition-colors">
+                  <ShoppingCart className="w-8 h-8 text-info-600" />
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-600">Phone</label>
-                  <p className="text-gray-900 mt-1">{selectedInvoice.phone || 'N/A'}</p>
-                </div>
-                {selectedInvoice.address && (
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-600">Address</label>
-                    <p className="text-gray-900 mt-1">{selectedInvoice.address}</p>
-                  </div>
-                )}
+                <h3 className="font-semibold text-gray-900 mb-2">Counter Sale</h3>
+                <p className="text-sm text-gray-600">
+                  Create invoice for direct sales from delivery orders
+                </p>
               </div>
-            </div>
-
-            {/* Amount Details */}
-            <div className="border-t border-gray-200 pt-4">
-              <h4 className="font-semibold text-gray-900 mb-3">Amount Details</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(selectedInvoice.subtotal)}</span>
-                </div>
-                {selectedInvoice.gst_total > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">GST (18%)</span>
-                    <span className="font-medium">{formatCurrency(selectedInvoice.gst_total)}</span>
-                  </div>
-                )}
-                {selectedInvoice.fst_total > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">FST (16%)</span>
-                    <span className="font-medium">{formatCurrency(selectedInvoice.fst_total)}</span>
-                  </div>
-                )}
-                {selectedInvoice.discount > 0 && (
-                  <div className="flex justify-between text-danger-600">
-                    <span>Discount</span>
-                    <span>-{formatCurrency(selectedInvoice.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
-                  <span>Total Amount</span>
-                  <span className="text-primary-600">{formatCurrency(selectedInvoice.net_amount)}</span>
-                </div>
-              </div>
-            </div>
+            </button>
           </div>
 
           <ModalFooter>
-            <button onClick={() => toast.info('PDF download coming soon')} className="btn btn-outline">
-              <Download className="w-4 h-4 mr-2" />
-              Download PDF
-            </button>
-            <button onClick={() => setShowViewModal(false)} className="btn btn-primary">
-              Close
+            <button
+              onClick={() => setShowInvoiceTypeModal(false)}
+              className="btn btn-outline w-full"
+            >
+              Cancel
             </button>
           </ModalFooter>
         </Modal>
       )}
 
-      {/* Create Modal - Placeholder */}
-      {showCreateModal && (
-        <Modal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          title="Create New Invoice"
-          size="lg"
-        >
-          <div className="text-center py-8 text-gray-600">
-            <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-            <p className="text-lg font-medium mb-2">Invoice Form</p>
-            <p className="text-sm">Form component coming soon...</p>
-            <p className="text-xs text-gray-500 mt-2">
-              Will include options for Counter Sale or Complaint Service invoice
-            </p>
-          </div>
-          <ModalFooter>
-            <button onClick={() => setShowCreateModal(false)} className="btn btn-outline">
-              Close
-            </button>
-          </ModalFooter>
-        </Modal>
+      {/* Complaint Invoice Modal */}
+      {showComplaintModal && (
+        <CreateComplaintInvoiceModal
+          isOpen={showComplaintModal}
+          onClose={() => setShowComplaintModal(false)}
+          onSuccess={handleInvoiceCreated}
+        />
+      )}
+
+      {/* Counter Sale Invoice Modal */}
+      {showCounterSaleModal && (
+        <CreateCounterSaleInvoiceModal
+          isOpen={showCounterSaleModal}
+          onClose={() => setShowCounterSaleModal(false)}
+          onSuccess={handleInvoiceCreated}
+        />
+      )}
+
+      {/* View Invoice Modal */}
+      {showViewModal && selectedInvoiceId && (
+        <InvoiceViewModal
+          isOpen={showViewModal}
+          onClose={() => {
+            setShowViewModal(false);
+            setSelectedInvoiceId(null);
+          }}
+          invoiceId={selectedInvoiceId}
+        />
       )}
     </div>
   );

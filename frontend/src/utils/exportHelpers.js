@@ -1,36 +1,39 @@
 // frontend/src/utils/exportHelpers.js
 
 /**
- * Export data to CSV file
+ * Convert array of objects to CSV string
+ */
+export const convertToCSV = (data) => {
+  if (!data || data.length === 0) return '';
+  
+  const headers = Object.keys(data[0]);
+  const csvHeaders = headers.join(',');
+  
+  const csvRows = data.map(row => 
+    headers.map(header => {
+      const value = row[header];
+      
+      // Handle null/undefined
+      if (value === null || value === undefined) return '';
+      
+      // Handle strings with commas or quotes
+      if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      
+      return value;
+    }).join(',')
+  );
+  
+  return [csvHeaders, ...csvRows].join('\n');
+};
+
+/**
+ * Download CSV file
  */
 export const exportToCSV = (data, filename = 'export.csv') => {
-  if (!data || data.length === 0) {
-    alert('No data to export');
-    return;
-  }
-
-  // Convert data to CSV
-  const headers = Object.keys(data[0]);
-  const csvRows = [];
-
-  // Add headers
-  csvRows.push(headers.join(','));
-
-  // Add data rows
-  for (const row of data) {
-    const values = headers.map(header => {
-      const value = row[header];
-      // Handle commas, quotes, and newlines in values
-      if (value === null || value === undefined) return '';
-      const escaped = String(value).replace(/"/g, '""');
-      return `"${escaped}"`;
-    });
-    csvRows.push(values.join(','));
-  }
-
-  // Create blob and download
-  const csvContent = csvRows.join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const csv = convertToCSV(data);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   
   if (link.download !== undefined) {
@@ -41,52 +44,81 @@ export const exportToCSV = (data, filename = 'export.csv') => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } else {
+    alert('Your browser does not support downloading files');
   }
-};
-
-/**
- * Export table to Excel (CSV format)
- */
-export const exportTableToExcel = (tableData, filename = 'report.csv') => {
-  exportToCSV(tableData, filename);
-};
-
-/**
- * Print report
- */
-export const printReport = () => {
-  window.print();
-};
-
-/**
- * Format data for export (clean up for CSV)
- */
-export const formatForExport = (data, mapping = {}) => {
-  return data.map(item => {
-    const formatted = {};
-    
-    Object.keys(mapping).forEach(key => {
-      const sourceKey = mapping[key] || key;
-      formatted[key] = item[sourceKey];
-    });
-    
-    return Object.keys(formatted).length > 0 ? formatted : item;
-  });
 };
 
 /**
  * Generate filename with timestamp
  */
-export const generateFilename = (prefix = 'report', extension = 'csv') => {
+export const generateFilename = (baseName) => {
   const date = new Date();
-  const timestamp = date.toISOString().split('T')[0];
-  return `${prefix}_${timestamp}.${extension}`;
+  const timestamp = date.toISOString().split('T')[0]; // YYYY-MM-DD
+  return `${baseName}_${timestamp}.csv`;
+};
+
+/**
+ * Export table to PDF (simple text-based)
+ */
+export const exportToPDF = (data, title, filename = 'export.txt') => {
+  if (!data || data.length === 0) {
+    alert('No data to export');
+    return;
+  }
+  
+  const headers = Object.keys(data[0]);
+  const maxWidths = headers.map(header => {
+    const values = data.map(row => String(row[header] || '').length);
+    return Math.max(header.length, ...values);
+  });
+  
+  // Create header row
+  let content = title + '\n';
+  content += '='.repeat(80) + '\n\n';
+  
+  // Add headers
+  content += headers.map((h, i) => h.padEnd(maxWidths[i])).join(' | ') + '\n';
+  content += headers.map((h, i) => '-'.repeat(maxWidths[i])).join('-+-') + '\n';
+  
+  // Add data rows
+  data.forEach(row => {
+    content += headers.map((h, i) => 
+      String(row[h] || '').padEnd(maxWidths[i])
+    ).join(' | ') + '\n';
+  });
+  
+  content += '\n' + '='.repeat(80) + '\n';
+  content += `Generated: ${new Date().toLocaleString()}\n`;
+  
+  // Download as text file
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename.replace('.txt', '_report.txt');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+/**
+ * Export data in multiple formats
+ */
+export const exportData = (data, filename, format = 'csv') => {
+  if (format === 'csv') {
+    exportToCSV(data, generateFilename(filename));
+  } else if (format === 'pdf') {
+    exportToPDF(data, filename.replace(/_/g, ' ').toUpperCase(), generateFilename(filename));
+  }
 };
 
 export default {
+  convertToCSV,
   exportToCSV,
-  exportTableToExcel,
-  printReport,
-  formatForExport,
+  exportToPDF,
+  exportData,
   generateFilename,
 };

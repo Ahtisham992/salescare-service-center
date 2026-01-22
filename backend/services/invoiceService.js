@@ -1,4 +1,4 @@
-// backend/services/invoiceService.js
+// backend/services/invoiceService.js - FIXED VERSION
 const { query } = require('../config/database');
 
 /**
@@ -147,7 +147,7 @@ const getServiceCharges = async (complaintId) => {
 };
 
 /**
- * Build complaint service invoice items
+ * Build complaint service invoice items - FIXED VERSION
  */
 const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null, additionalCharges = {}) => {
   const items = [];
@@ -155,69 +155,66 @@ const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null,
   // Get service charges
   const serviceData = await getServiceCharges(complaintId);
   
-  if (serviceData.selected_service_charge && parseFloat(serviceData.selected_service_charge) > 0) {
-    // Use selected service charge
+  if (!serviceData) {
+    throw new Error('Complaint data not found');
+  }
+
+  // Map service charge types to readable descriptions
+  const serviceDescriptions = {
+    'visit_charges_24h': 'Visit Charges (24 Hours)',
+    'visit_charges_48h': 'Visit Charges (48 Hours)',
+    'gas_charges': 'Gas Filling Charges',
+    'inspection_charges_csc': 'Inspection Charges (CSC)',
+    'washing_charges': 'Washing/Service Charges',
+    'transport_charges_per_km': 'Transport Charges (per km)',
+    'dismantling_charges': 'Dismantling Charges',
+    'reinstallation_charges': 'Re-installation Charges'
+  };
+
+  // Add service charge based on serviceChargeType parameter
+  if (serviceChargeType && serviceData[serviceChargeType]) {
+    const chargeAmount = parseFloat(serviceData[serviceChargeType]);
+    
+    // Only add if amount is greater than 0
+    if (chargeAmount > 0) {
+      items.push({
+        item_type: 'SER',
+        description: serviceDescriptions[serviceChargeType] || 'Service Charges',
+        quantity: 1,
+        rate_per_unit: chargeAmount,
+        gst_percentage: 18, // Changed from 0 to 18 for services
+        fst_percentage: 0,  // Changed from 16 to 0
+        discount: 0
+      });
+    }
+  } 
+  // Fallback: Use selected_service_charge if no serviceChargeType provided
+  else if (serviceData.selected_service_charge && parseFloat(serviceData.selected_service_charge) > 0) {
     items.push({
       item_type: 'SER',
       description: `Service Charges - ${serviceData.product_name || 'General Service'}`,
       quantity: 1,
       rate_per_unit: parseFloat(serviceData.selected_service_charge),
-      gst_percentage: 0,
-      fst_percentage: 16,
-      discount: 0
-    });
-  } else if (serviceChargeType && serviceData[serviceChargeType]) {
-    // Use specific tariff charge
-    const chargeAmount = parseFloat(serviceData[serviceChargeType]);
-    const chargeDescription = serviceChargeType
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
-    
-    items.push({
-      item_type: 'SER',
-      description: chargeDescription,
-      quantity: 1,
-      rate_per_unit: chargeAmount,
-      gst_percentage: 0,
-      fst_percentage: 16,
-      discount: 0
-    });
-  }
-
-  // Add additional service charges if provided
-  if (additionalCharges.transport && additionalCharges.transport > 0) {
-    items.push({
-      item_type: 'SER',
-      description: 'Transport Charges',
-      quantity: 1,
-      rate_per_unit: parseFloat(additionalCharges.transport),
-      gst_percentage: 0,
+      gst_percentage: 18,
       fst_percentage: 0,
       discount: 0
     });
   }
 
-  if (additionalCharges.dismantling && additionalCharges.dismantling > 0) {
-    items.push({
-      item_type: 'SER',
-      description: 'Dismantling Charges',
-      quantity: 1,
-      rate_per_unit: parseFloat(additionalCharges.dismantling),
-      gst_percentage: 0,
-      fst_percentage: 0,
-      discount: 0
-    });
-  }
-
-  if (additionalCharges.reinstallation && additionalCharges.reinstallation > 0) {
-    items.push({
-      item_type: 'SER',
-      description: 'Re-installation Charges',
-      quantity: 1,
-      rate_per_unit: parseFloat(additionalCharges.reinstallation),
-      gst_percentage: 0,
-      fst_percentage: 0,
-      discount: 0
+  // Add custom additional charges from the additionalCharges object
+  if (additionalCharges && typeof additionalCharges === 'object') {
+    Object.values(additionalCharges).forEach(charge => {
+      if (charge.description && charge.amount && parseFloat(charge.amount) > 0) {
+        items.push({
+          item_type: 'SER',
+          description: charge.description,
+          quantity: 1,
+          rate_per_unit: parseFloat(charge.amount),
+          gst_percentage: parseFloat(charge.gst_percentage || 18),
+          fst_percentage: 0,
+          discount: 0
+        });
+      }
     });
   }
 
@@ -227,7 +224,7 @@ const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null,
   partsData.items.forEach(item => {
     items.push({
       item_type: 'PRD',
-      description: item.description,
+      description: `${item.description} (${item.item_status})`,
       quantity: item.quantity,
       rate_per_unit: item.unit_price,
       gst_percentage: 18,
@@ -236,6 +233,10 @@ const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null,
     });
   });
 
+  // If still no items, it means no service charges selected and no parts
+  // This is OK - could be a zero-amount invoice or manual entry needed
+  // Don't throw error here, let the controller handle it
+  
   return items;
 };
 

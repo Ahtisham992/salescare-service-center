@@ -1,4 +1,4 @@
-// backend/controllers/complaintController.js
+// backend/controllers/complaintController.js - COMPLETE WORKING VERSION
 const { query, transaction } = require('../config/database');
 const { generateComplaintNumber } = require('../utils/autoNumber');
 const { validateComplaint } = require('../utils/validators');
@@ -12,6 +12,7 @@ const getComplaints = async (req, res) => {
       page = 1,
       limit = 10,
       status,
+      priority,
       warranty_status,
       technician_id,
       customer_id,
@@ -33,6 +34,12 @@ const getComplaints = async (req, res) => {
     if (status) {
       conditions.push(`c.status = $${paramCount}`);
       params.push(status);
+      paramCount++;
+    }
+
+    if (priority) {
+      conditions.push(`c.priority = $${paramCount}`);
+      params.push(priority);
       paramCount++;
     }
 
@@ -96,12 +103,14 @@ const getComplaints = async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM complaints c
+      JOIN customers cust ON c.customer_id = cust.customer_id
+      JOIN products p ON c.product_id = p.product_id
       ${whereClause}
     `;
     const countResult = await query(countQuery, params);
     const totalComplaints = parseInt(countResult.rows[0].total);
 
-    // Get complaints
+    // Get complaints - note paramCount is already the next number to use
     const complaintsQuery = `
       SELECT 
         c.complaint_id,
@@ -129,6 +138,7 @@ const getComplaints = async (req, res) => {
         oa.area_name,
         tech.user_id as technician_id,
         tech.full_name as technician_name,
+        tech.phone as technician_phone,
         creator.full_name as created_by_name,
         c.created_at,
         c.updated_at
@@ -143,8 +153,9 @@ const getComplaints = async (req, res) => {
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
     `;
 
-    params.push(limit, offset);
-    const result = await query(complaintsQuery, params);
+    // Add limit and offset to params
+    const mainQueryParams = [...params, limit, offset];
+    const result = await query(complaintsQuery, mainQueryParams);
 
     res.json({
       success: true,
