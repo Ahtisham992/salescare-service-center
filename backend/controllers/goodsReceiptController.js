@@ -1,7 +1,7 @@
 // backend/controllers/goodsReceiptController.js
-const { query, transaction } = require('../config/database');
-const { generateGRNumber } = require('../utils/autoNumber');
-const { processGoodsReceipt } = require('../services/inventoryService');
+const { query, transaction } = require("../config/database");
+const { generateGRNumber } = require("../utils/autoNumber");
+const { processGoodsReceipt } = require("../services/inventoryService");
 
 // @desc    Get all goods receipts
 // @route   GET /api/goods-receipts
@@ -15,7 +15,7 @@ const getAllGoodsReceipts = async (req, res) => {
       area_id,
       date_from,
       date_to,
-      search
+      search,
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -58,19 +58,24 @@ const getAllGoodsReceipts = async (req, res) => {
       paramCount++;
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     // Get total count
-    const countResult = await query(`
+    const countResult = await query(
+      `
       SELECT COUNT(*) as total FROM goods_receipts gr ${whereClause}
-    `, params);
+    `,
+      params,
+    );
 
     const totalGRs = parseInt(countResult.rows[0].total);
 
     // Get goods receipts
     params.push(limit, offset);
 
-    const result = await query(`
+    const result = await query(
+      `
       SELECT 
         gr.gr_id,
         gr.gr_number,
@@ -100,7 +105,9 @@ const getAllGoodsReceipts = async (req, res) => {
       ${whereClause}
       ORDER BY gr.gr_date DESC, gr.gr_id DESC
       LIMIT $${paramCount} OFFSET $${paramCount + 1}
-    `, params);
+    `,
+      params,
+    );
 
     res.json({
       success: true,
@@ -110,16 +117,15 @@ const getAllGoodsReceipts = async (req, res) => {
           current_page: parseInt(page),
           total_pages: Math.ceil(totalGRs / limit),
           total_items: totalGRs,
-          items_per_page: parseInt(limit)
-        }
-      }
+          items_per_page: parseInt(limit),
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Get goods receipts error:', error);
+    console.error("Get goods receipts error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch goods receipts'
+      message: "Failed to fetch goods receipts",
     });
   }
 };
@@ -132,7 +138,8 @@ const getGoodsReceiptById = async (req, res) => {
     const { id } = req.params;
 
     // Get GR header
-    const grResult = await query(`
+    const grResult = await query(
+      `
       SELECT 
         gr.*,
         po.po_number,
@@ -150,17 +157,20 @@ const getGoodsReceiptById = async (req, res) => {
       JOIN operational_areas oa ON gr.area_id = oa.area_id
       LEFT JOIN users u ON gr.received_by = u.user_id
       WHERE gr.gr_id = $1
-    `, [id]);
+    `,
+      [id],
+    );
 
     if (grResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Goods receipt not found'
+        message: "Goods receipt not found",
       });
     }
 
     // Get GR items
-    const itemsResult = await query(`
+    const itemsResult = await query(
+      `
       SELECT 
         gi.*,
         i.item_code,
@@ -171,21 +181,22 @@ const getGoodsReceiptById = async (req, res) => {
       JOIN items i ON gi.item_id = i.item_id
       WHERE gi.gr_id = $1
       ORDER BY gi.gr_item_id
-    `, [id]);
+    `,
+      [id],
+    );
 
     res.json({
       success: true,
       data: {
         ...grResult.rows[0],
-        items: itemsResult.rows
-      }
+        items: itemsResult.rows,
+      },
     });
-
   } catch (error) {
-    console.error('Get goods receipt error:', error);
+    console.error("Get goods receipt error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch goods receipt details'
+      message: "Failed to fetch goods receipt details",
     });
   }
 };
@@ -195,182 +206,217 @@ const getGoodsReceiptById = async (req, res) => {
 // @access  Private
 const createGoodsReceipt = async (req, res) => {
   try {
-    const {
-      po_id,
-      gr_date,
-      area_id,
-      items,
-      notes
-    } = req.body;
+    const { po_id, gr_date, area_id, items, notes } = req.body;
 
-    // Validation
+    // 1. Basic Validation
     if (!po_id || !gr_date || !area_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'PO ID, GR date, and area are required'
-      });
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one item is required'
-      });
-    }
-
-    // Validate all items
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item.item_id || !item.quantity_received || item.quantity_received <= 0) {
-        return res.status(400).json({
+      return res
+        .status(400)
+        .json({
           success: false,
-          message: `Item ${i + 1}: Valid item ID and quantity received are required`
+          message: "PO ID, GR date, and area are required",
         });
-      }
+    }
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "At least one item is required" });
     }
 
-    // Verify PO exists and is approved
-    const poCheck = await query(`
-      SELECT 
-        po.po_id,
-        po.status,
-        po.vendor_id,
-        (SELECT json_agg(pi.*) FROM po_items pi WHERE pi.po_id = po.po_id) as po_items
-      FROM purchase_orders po
-      WHERE po.po_id = $1
-    `, [po_id]);
+    // 2. Fetch PO and its Items
+    const poCheck = await query(
+      `
+      SELECT po.po_id, po.status, po.vendor_id 
+      FROM purchase_orders po WHERE po.po_id = $1
+    `,
+      [po_id],
+    );
 
     if (poCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Purchase order not found'
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Purchase order not found" });
     }
 
     const purchaseOrder = poCheck.rows[0];
-
-    if (purchaseOrder.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot receive goods for cancelled purchase order'
-      });
+    if (purchaseOrder.status === "cancelled") {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Cannot receive goods for cancelled purchase order",
+        });
     }
+    // Allow 'approved' (first time) or 'received' (if adding more items to a partially received PO - though usually status stays approved if partial)
+    // For this logic, we assume status stays 'approved' until fully received.
 
-    // Verify area exists
-    const areaCheck = await query(
-      'SELECT area_id FROM operational_areas WHERE area_id = $1',
-      [area_id]
+    // 3. Fetch "Targets" (What was ordered)
+    const poItemsResult = await query(
+      "SELECT item_id, quantity, unit_price, status FROM po_items WHERE po_id = $1",
+      [po_id],
     );
 
-    if (areaCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Operational area not found'
-      });
-    }
+    // 4. Fetch "History" (What was already received in previous GRs)
+    const previousReceiptsResult = await query(
+      `
+      SELECT gi.item_id, SUM(gi.quantity_received) as total_received
+      FROM gr_items gi
+      JOIN goods_receipts gr ON gi.gr_id = gr.gr_id
+      WHERE gr.po_id = $1
+      GROUP BY gi.item_id
+    `,
+      [po_id],
+    );
 
-    // Match items with PO items to get prices
-    const poItemsMap = {};
-    purchaseOrder.po_items.forEach(poi => {
-      poItemsMap[poi.item_id] = {
-        unit_price: parseFloat(poi.unit_price),
-        po_quantity: parseInt(poi.quantity),
-        status: poi.status
+    // Create a map of History
+    const historyMap = {};
+    previousReceiptsResult.rows.forEach((row) => {
+      historyMap[row.item_id] = parseInt(row.total_received);
+    });
+
+    // 5. Build "Remaining Balance" Map
+    const validationMap = {}; // item_id -> { allowed, unit_price, status, ordered }
+    let isPOFullyCompleted = true; // Assumption, will be checked below
+
+    poItemsResult.rows.forEach((poItem) => {
+      const previouslyReceived = historyMap[poItem.item_id] || 0;
+      const remaining = poItem.quantity - previouslyReceived;
+
+      validationMap[poItem.item_id] = {
+        ordered: poItem.quantity,
+        received_before: previouslyReceived,
+        remaining_allowed: remaining,
+        unit_price: parseFloat(poItem.unit_price),
+        status: poItem.status,
       };
     });
 
-    // Validate items against PO
-    for (const item of items) {
-      if (!poItemsMap[item.item_id]) {
+    // 6. Validate Incoming Items against Remaining Balance
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const validData = validationMap[item.item_id];
+
+      if (!validData) {
         return res.status(400).json({
           success: false,
-          message: `Item ${item.item_id} is not in the purchase order`
+          message: `Item ID ${item.item_id} is not part of this Purchase Order.`,
+        });
+      }
+
+      const qtyToReceive = parseInt(item.quantity_received);
+
+      if (qtyToReceive <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${item.item_id}: Quantity must be greater than 0.`,
+        });
+      }
+
+      if (qtyToReceive > validData.remaining_allowed) {
+        return res.status(400).json({
+          success: false,
+          message: `Item ${item.item_id} Error: You are trying to receive ${qtyToReceive}, but only ${validData.remaining_allowed} are remaining pending (Ordered: ${validData.ordered}, Prev Received: ${validData.received_before}).`,
         });
       }
     }
 
-    // Generate GR number
+    // 7. Generate GR Number & Execute Transaction
     const grNumber = await generateGRNumber();
 
-    // Create GR in transaction
     const result = await transaction(async (client) => {
-      // Insert GR header
-      const grResult = await client.query(`
-        INSERT INTO goods_receipts (
-          gr_number,
-          po_id,
-          gr_date,
-          area_id,
-          received_by,
-          notes
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+      // A. Insert GR Header
+      const grResult = await client.query(
+        `
+        INSERT INTO goods_receipts (gr_number, po_id, gr_date, area_id, received_by, notes)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
-      `, [grNumber, po_id, gr_date, area_id, req.user.user_id, notes || null]);
+      `,
+        [grNumber, po_id, gr_date, area_id, req.user.user_id, notes || null],
+      );
 
       const grId = grResult.rows[0].gr_id;
-
-      // Insert GR items
       const grItems = [];
+
+      // B. Insert GR Items
       for (const item of items) {
-        const poItemData = poItemsMap[item.item_id];
-        
-        const itemResult = await client.query(`
-          INSERT INTO gr_items (
-            gr_id,
-            item_id,
-            quantity_received,
-            unit_price
-          ) VALUES ($1, $2, $3, $4)
+        const itemData = validationMap[item.item_id];
+
+        const itemResult = await client.query(
+          `
+          INSERT INTO gr_items (gr_id, item_id, quantity_received, unit_price) 
+          VALUES ($1, $2, $3, $4)
           RETURNING *
-        `, [
-          grId,
-          item.item_id,
-          item.quantity_received,
-          poItemData.unit_price
-        ]);
+        `,
+          [grId, item.item_id, item.quantity_received, itemData.unit_price],
+        );
 
         grItems.push({
           ...itemResult.rows[0],
-          status: poItemData.status // Include status for inventory update
+          status: itemData.status,
         });
       }
 
-      // Update PO status to received
-      await client.query(`
+      // C. Determine Final PO Status
+      // We need to check if *after this transaction*, everything is fully received.
+      let allItemsFullyReceived = true;
+
+      for (const poItem of poItemsResult.rows) {
+        // Find how much we are receiving NOW for this item
+        const currentItem = items.find((i) => i.item_id === poItem.item_id);
+        const nowReceiving = currentItem
+          ? parseInt(currentItem.quantity_received)
+          : 0;
+
+        const previous = historyMap[poItem.item_id] || 0;
+        const totalAfterThis = previous + nowReceiving;
+
+        if (totalAfterThis < poItem.quantity) {
+          allItemsFullyReceived = false;
+          break; // Found one item that is still pending
+        }
+      }
+
+      const newStatus = allItemsFullyReceived ? "received" : "approved";
+
+      // Update PO Status
+      await client.query(
+        `
         UPDATE purchase_orders
-        SET status = 'received'
-        WHERE po_id = $1
-      `, [po_id]);
+        SET status = $1
+        WHERE po_id = $2
+      `,
+        [newStatus, po_id],
+      );
 
       return {
         gr: grResult.rows[0],
-        items: grItems
+        items: grItems,
+        poStatus: newStatus,
       };
     });
 
-    // Process inventory addition
+    // 8. Process Inventory (Outside DB transaction to keep it clean, or inside if inventoryService supports it)
     const inventoryResults = await processGoodsReceipt(
       result.gr.gr_id,
       result.gr.gr_number,
       result.items,
       area_id,
-      req.user.user_id
+      req.user.user_id,
     );
 
     res.status(201).json({
       success: true,
-      message: 'Goods receipt created successfully. Inventory updated.',
+      message: `Goods receipt created. PO Status: ${result.poStatus}`,
       data: {
         ...result,
-        inventory_changes: inventoryResults
-      }
+        inventory_changes: inventoryResults,
+      },
     });
-
   } catch (error) {
-    console.error('Create goods receipt error:', error);
+    console.error("Create goods receipt error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to create goods receipt'
+      message: error.message || "Failed to create goods receipt",
     });
   }
 };
@@ -385,39 +431,39 @@ const deleteGoodsReceipt = async (req, res) => {
     // Note: This should also reverse inventory transactions
     // For now, just prevent deletion if inventory was updated
     const txnCheck = await query(
-      'SELECT transaction_id FROM inventory_transactions WHERE reference_id = $1 AND transaction_type = \'GR\' LIMIT 1',
-      [id]
+      "SELECT transaction_id FROM inventory_transactions WHERE reference_id = $1 AND transaction_type = 'GR' LIMIT 1",
+      [id],
     );
 
     if (txnCheck.rows.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot delete goods receipt with inventory transactions. Contact administrator.'
+        message:
+          "Cannot delete goods receipt with inventory transactions. Contact administrator.",
       });
     }
 
     const result = await query(
-      'DELETE FROM goods_receipts WHERE gr_id = $1 RETURNING gr_number',
-      [id]
+      "DELETE FROM goods_receipts WHERE gr_id = $1 RETURNING gr_number",
+      [id],
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Goods receipt not found'
+        message: "Goods receipt not found",
       });
     }
 
     res.json({
       success: true,
-      message: `Goods receipt ${result.rows[0].gr_number} deleted successfully`
+      message: `Goods receipt ${result.rows[0].gr_number} deleted successfully`,
     });
-
   } catch (error) {
-    console.error('Delete GR error:', error);
+    console.error("Delete GR error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete goods receipt'
+      message: "Failed to delete goods receipt",
     });
   }
 };
@@ -426,5 +472,5 @@ module.exports = {
   getAllGoodsReceipts,
   getGoodsReceiptById,
   createGoodsReceipt,
-  deleteGoodsReceipt
+  deleteGoodsReceipt,
 };

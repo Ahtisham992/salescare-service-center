@@ -33,10 +33,27 @@ const deliveryService = {
     return await apiHelper.delete(`/delivery-orders/${id}`);
   },
 
-  // Search Inventory Items for the Dropdown
-  // This uses your existing inventory stock endpoint
-  searchItems: async (query) => {
-    return await apiHelper.get(`/inventory/stock?search=${query}`);
+  // ✅ FIXED: Search Inventory Items
+  searchItems: async (query, areaId = 1) => {
+    try {
+      // Get items with stock information
+      const response = await apiHelper.get(
+        `/inventory/stock?search=${encodeURIComponent(query)}&area_id=${areaId}&limit=20`
+      );
+            
+      // ✅ FIX: Backend returns { success: true, data: { stock: [...], totals: {...} } }
+      // We need to extract the items array from response.data.stock (not .items!)
+      const items = response.data?.stock || [];
+            
+      // Return in the format expected by the modal
+      return {
+        data: items
+      };
+    } catch (error) {
+      console.error('Search items error:', error);
+      // Return empty array on error
+      return { data: [] };
+    }
   }
 };
 

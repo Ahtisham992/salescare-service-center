@@ -124,7 +124,7 @@ const getPurchaseOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get PO header
+    // 1. Get PO Header
     const poResult = await query(`
       SELECT 
         po.*,
@@ -149,13 +149,19 @@ const getPurchaseOrderById = async (req, res) => {
       });
     }
 
-    // Get PO items
+    // 2. Get PO items WITH "Received So Far" Calculation [UPDATED SECTION]
     const itemsResult = await query(`
       SELECT 
         pi.*,
         i.item_code,
         i.description,
-        i.category
+        i.category,
+        COALESCE((
+          SELECT SUM(gi.quantity_received)
+          FROM gr_items gi
+          JOIN goods_receipts gr ON gi.gr_id = gr.gr_id
+          WHERE gr.po_id = pi.po_id AND gi.item_id = pi.item_id
+        ), 0) as received_so_far
       FROM po_items pi
       JOIN items i ON pi.item_id = i.item_id
       WHERE pi.po_id = $1
@@ -166,7 +172,7 @@ const getPurchaseOrderById = async (req, res) => {
       success: true,
       data: {
         ...poResult.rows[0],
-        items: itemsResult.rows
+        items: itemsResult.rows // Now includes received_so_far
       }
     });
 

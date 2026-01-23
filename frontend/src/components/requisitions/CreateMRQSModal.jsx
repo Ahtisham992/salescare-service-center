@@ -76,16 +76,18 @@ const CreateMRQSModal = ({ isOpen, onClose }) => {
     const delayDebounceFn = setTimeout(async () => {
       if (itemSearch.length > 1) {
         try {
-          const res = await deliveryService.searchItems(itemSearch);
+          // FIX 1: Pass the area_id to the service so the Backend searches the correct Cost Center
+          const res = await deliveryService.searchItems(itemSearch, formData.area_id);
           
-          // Access the stock array safely
-          const allItems = res.data?.stock || res.data?.data?.stock || []; 
+          // FIX 2: The service already returns { data: [Array] }
+          // We just need res.data. We do NOT need .stock because the service already extracted it.
+          const allItems = res.data || []; 
           
-          // ✅ CRITICAL FIX: Filter items by the Complaint's Area ID
-          // This prevents showing stock from other cities (e.g. Islamabad stock for a RWP complaint)
+          // Optional: The backend already filtered by Area, but we can keep a safety check
+          // We use '==' to allow string/number matching (e.g. "1" == 1) just in case
           const filteredItems = formData.area_id 
-            ? allItems.filter(item => item.area_id === formData.area_id)
-            : []; // If no area selected, show nothing (safety)
+            ? allItems.filter(item => item.area_id == formData.area_id)
+            : []; 
 
           setItemSearchResults(filteredItems);
         } catch (err) {

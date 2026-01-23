@@ -1,12 +1,12 @@
 // frontend/src/components/goods-receipt/CreateGoodsReceiptModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Modal, { ModalFooter } from '../common/Modal';
 import goodsReceiptService from '../../services/goodsReceiptService';
-import purchaseService from '../../services/purchaseService'; // Import this
+import purchaseService from '../../services/purchaseService';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Package, AlertCircle, CheckCircle } from 'lucide-react';
+import { Package, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
@@ -23,18 +23,19 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
   const [selectedPO, setSelectedPO] = useState(null);
   const [loadingPODetails, setLoadingPODetails] = useState(false);
 
-  // Fetch approved purchase orders
+  // 1. Fetch approved purchase orders for the dropdown
   const { data: poData } = useQuery({
     queryKey: ['approved-pos'],
     queryFn: goodsReceiptService.getApprovedPOs,
     enabled: isOpen
   });
 
-  // Create mutation
+  // 2. Create GR Mutation
   const createMutation = useMutation({
     mutationFn: (data) => goodsReceiptService.create(data),
-    onSuccess: () => {
-      toast.success('Goods receipt created successfully! Inventory updated.');
+    onSuccess: (data) => {
+      // Show success message with specific details
+      toast.success(data.message || 'Goods receipt created successfully!');
       onClose();
       resetForm();
     },
@@ -56,10 +57,10 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
     setSelectedPO(null);
   };
 
-  // FIXED: Fetch full PO details when selected
+  // 3. Handle PO Selection & Calculate Remaining Quantities
   const handlePOSelection = async (e) => {
     const poId = e.target.value;
-        
+    
     setFormData(prev => ({ ...prev, po_id: poId }));
 
     if (!poId) {
@@ -71,9 +72,8 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
     try {
       setLoadingPODetails(true);
       
-      // Fetch full PO details with items
+      // Fetch full PO details (Now includes 'received_so_far' from backend)
       const response = await purchaseService.getById(parseInt(poId));
-      
       const poDetails = response.data;
       
       if (!poDetails) {
@@ -83,25 +83,31 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
 
       setSelectedPO(poDetails);
       
-      // Auto-populate items with PO quantities
-      const items = (poDetails.items || []).map(item => ({
-        item_id: item.item_id,
-        item_code: item.item_code,
-        description: item.description,
-        po_quantity: item.quantity,
-        quantity_received: item.quantity, // Default to PO quantity
-        unit_price: parseFloat(item.unit_price),
-        status: item.status || 'Normal'
-      }));
+      // SMART LOGIC: Calculate defaults based on history
+      const items = (poDetails.items || []).map(item => {
+        const ordered = parseInt(item.quantity);
+        const receivedBefore = parseInt(item.received_so_far || 0);
+        // Default to remaining balance (Ordered - Received Before)
+        const remaining = Math.max(0, ordered - receivedBefore);
 
+        return {
+          item_id: item.item_id,
+          item_code: item.item_code,
+          description: item.description,
+          po_quantity: ordered,
+          received_before: receivedBefore,
+          quantity_received: remaining, // <--- This sets the default to 20 (not 100)
+          unit_price: parseFloat(item.unit_price),
+          status: item.status || 'Normal'
+        };
+      });
 
-      setFormData(prev => ({
-        ...prev,
-        items
-      }));
+      setFormData(prev => ({ ...prev, items }));
 
-      if (items.length === 0) {
-        toast.warning('This PO has no items');
+      // Alert if everything is already received
+      const allReceived = items.every(i => i.quantity_received === 0);
+      if (allReceived && items.length > 0) {
+        toast('This PO is already fully received!', { icon: 'ℹ️' });
       }
 
     } catch (error) {
@@ -114,41 +120,45 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
 
   const handleQuantityChange = (index, value) => {
     const newItems = [...formData.items];
-    newItems[index].quantity_received = parseInt(value) || 0;
+    const val = parseInt(value);
+    newItems[index].quantity_received = isNaN(val) ? 0 : val;
     setFormData(prev => ({ ...prev, items: newItems }));
   };
 
   const handleSubmit = () => {
-
     // Validation
-    if (!formData.po_id) {
-      toast.error('Please select a purchase order');
-      return;
-    }
+    if (!formData.po_id) { toast.error('Please select a purchase order'); return; }
+    if (!formData.gr_date) { toast.error('Please select GR date'); return; }
+    if (!formData.area_id) { toast.error('Please select an area'); return; }
+    if (formData.items.length === 0) { toast.error('No items to receive.'); return; }
 
-    if (!formData.gr_date) {
-      toast.error('Please select GR date');
-      return;
-    }
-
-    if (!formData.area_id) {
-      toast.error('Please select an area');
-      return;
-    }
-
-    if (formData.items.length === 0) {
-      toast.error('No items to receive. Please select a PO with items.');
-      return;
-    }
-
-    // Check if all quantities are valid
+    // Check for negative values
     const invalidItems = formData.items.filter(item => 
-      !item.quantity_received || item.quantity_received <= 0
+      !item.quantity_received || item.quantity_received < 0
     );
 
     if (invalidItems.length > 0) {
-      toast.error('All items must have a valid quantity received');
+      toast.error('Quantity cannot be negative');
       return;
+    }
+
+    // Filter out items with 0 quantity (we don't create GR lines for 0)
+    const itemsToReceive = formData.items.filter(item => item.quantity_received > 0);
+
+    if (itemsToReceive.length === 0) {
+      toast.error('Please enter a quantity greater than 0 for at least one item');
+      return;
+    }
+
+    // Strict Check: Prevent over-receiving (matches backend validation)
+    const overReceived = itemsToReceive.find(item => {
+        const remaining = item.po_quantity - item.received_before;
+        return item.quantity_received > remaining;
+    });
+
+    if (overReceived) {
+        toast.error(`Cannot receive ${overReceived.quantity_received} for ${overReceived.item_code}. Only ${overReceived.po_quantity - overReceived.received_before} remaining.`);
+        return;
     }
 
     // Prepare payload
@@ -157,31 +167,27 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
       gr_date: formData.gr_date,
       area_id: parseInt(formData.area_id),
       notes: formData.notes,
-      items: formData.items.map(item => ({
+      items: itemsToReceive.map(item => ({
         item_id: item.item_id,
         quantity_received: item.quantity_received
       }))
     };
 
-
-    // Submit
     createMutation.mutate(payload);
   };
 
   const pos = poData?.data?.purchase_orders || [];
+  
+  // Calculate total for display
   const totalAmount = formData.items.reduce((sum, item) => 
     sum + (item.quantity_received * item.unit_price), 0
   );
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Create Goods Receipt" 
-      size="xl"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title="Create Goods Receipt" size="xl">
       <div className="space-y-6">
-        {/* Header Info */}
+        
+        {/* Top Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border">
           <div>
             <label className="form-label">Purchase Order *</label>
@@ -198,9 +204,7 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
                 </option>
               ))}
             </select>
-            {loadingPODetails && (
-              <p className="text-sm text-blue-600 mt-1">Loading PO details...</p>
-            )}
+            {loadingPODetails && <p className="text-xs text-blue-600 mt-1">Loading items...</p>}
           </div>
 
           <div>
@@ -240,148 +244,111 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* PO Info Display */}
+        {/* PO Summary Card */}
         {selectedPO && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <Package className="w-5 h-5 text-blue-600 mr-3 mt-0.5" />
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-600">Vendor:</span>
-                  <span className="font-medium ml-2">{selectedPO.vendor_name}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">PO Total:</span>
-                  <span className="font-medium ml-2">{formatCurrency(selectedPO.total_amount)}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Items:</span>
-                  <span className="font-medium ml-2">{formData.items.length} items</span>
-                </div>
-              </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start text-sm">
+            <Info className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-1 w-full">
+                <div><span className="text-gray-500">Vendor:</span> <span className="font-medium">{selectedPO.vendor_name}</span></div>
+                <div><span className="text-gray-500">Contact:</span> <span className="font-medium">{selectedPO.contact_person || 'N/A'}</span></div>
+                <div><span className="text-gray-500">Type:</span> <span className="badge badge-sm badge-info">{selectedPO.vendor_type}</span></div>
             </div>
           </div>
         )}
 
         {/* Items Table */}
         {formData.items.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 uppercase">
-              Items to Receive ({formData.items.length} items)
-            </h3>
-            <div className="border rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Item
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">
-                      PO Qty
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-32">
-                      Received Qty *
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">
-                      Unit Price
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">
-                      Amount
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {formData.items.map((item, index) => {
-                    const amount = item.quantity_received * item.unit_price;
-                    const isPartial = item.quantity_received < item.po_quantity;
-                    const isOver = item.quantity_received > item.po_quantity;
+          <div className="border rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-20">Ordered</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-20">Prev. Recv</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-blue-700 uppercase w-32 border-b-2 border-blue-300 bg-blue-50">Receive Now *</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-28">Unit Price</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase w-32">Total</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {formData.items.map((item, index) => {
+                  const amount = item.quantity_received * item.unit_price;
+                  const remaining = Math.max(0, item.po_quantity - item.received_before);
+                  const isOverLimit = item.quantity_received > remaining;
+                  const isZero = item.quantity_received === 0;
 
-                    return (
-                      <tr key={index} className={isOver ? 'bg-red-50' : ''}>
-                        <td className="px-4 py-3">
-                          <div className="text-sm font-medium text-gray-900">
-                            {item.description}
-                          </div>
-                          <div className="text-xs text-gray-500">{item.item_code}</div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="text-sm text-gray-600">{item.po_quantity}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.quantity_received}
-                            onChange={(e) => handleQuantityChange(index, e.target.value)}
-                            className={`form-input text-center h-9 ${
-                              isOver ? 'border-red-500 bg-red-50' : 
-                              isPartial ? 'border-yellow-500' : ''
-                            }`}
-                            disabled={createMutation.isPending}
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm text-gray-900">
-                          {formatCurrency(item.unit_price)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`badge ${
-                            item.status === 'FOC' ? 'badge-success' :
-                            item.status === 'OPB' ? 'badge-warning' :
-                            'badge-info'
-                          }`}>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-900">
-                          {formatCurrency(amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td colSpan="5" className="px-4 py-3 text-right font-semibold text-gray-700">
-                      Total Amount:
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
-                      {formatCurrency(totalAmount)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  return (
+                    <tr key={index} className={isOverLimit ? 'bg-red-50' : isZero ? 'bg-gray-50' : ''}>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">{item.description}</div>
+                        <div className="text-xs text-gray-500">{item.item_code}</div>
+                        <div className="mt-1">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                item.status === 'FOC' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                            }`}>
+                                {item.status}
+                            </span>
+                        </div>
+                      </td>
+                      
+                      {/* Ordered Column */}
+                      <td className="px-4 py-3 text-center text-sm text-gray-600">
+                        {item.po_quantity}
+                      </td>
 
-            {/* Warning for partial/over receipt */}
-            {formData.items.some(i => i.quantity_received !== i.po_quantity) && (
-              <div className="mt-3 flex items-start space-x-2 text-sm">
-                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <p className="text-yellow-700">
-                  <strong>Note:</strong> Some items have different received quantities than ordered.
-                  {formData.items.some(i => i.quantity_received > i.po_quantity) && (
-                    <span className="text-red-700 block mt-1">
-                      ⚠️ Warning: Some items exceed PO quantity!
-                    </span>
-                  )}
-                </p>
-              </div>
-            )}
+                      {/* Previously Received Column (New!) */}
+                      <td className="px-4 py-3 text-center text-sm text-gray-600 font-medium">
+                        {item.received_before > 0 ? (
+                            <span className="text-green-600">{item.received_before}</span>
+                        ) : '-'}
+                      </td>
+
+                      {/* Input Column */}
+                      <td className="px-4 py-3 bg-blue-50/30">
+                        <input
+                          type="number"
+                          min="0"
+                          max={remaining}
+                          value={item.quantity_received}
+                          onChange={(e) => handleQuantityChange(index, e.target.value)}
+                          className={`form-input text-center h-9 font-bold ${
+                            isOverLimit ? 'border-red-500 text-red-600 focus:ring-red-500' : 
+                            isZero ? 'text-gray-400' : 'text-blue-700 border-blue-300'
+                          }`}
+                          disabled={createMutation.isPending}
+                        />
+                        {isOverLimit && (
+                            <div className="text-[10px] text-red-600 text-center mt-1">
+                                Max: {remaining}
+                            </div>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-right text-sm text-gray-600">
+                        {formatCurrency(item.unit_price)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-gray-900">
+                        {formatCurrency(amount)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-gray-50">
+                <tr>
+                  <td colSpan="5" className="px-4 py-3 text-right font-semibold text-gray-700">Total Value:</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(totalAmount)}</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
 
-        {/* No items warning */}
+        {/* Empty State / Warning */}
         {formData.po_id && formData.items.length === 0 && !loadingPODetails && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5" />
-              <div className="text-sm text-yellow-800">
-                <strong>No items found</strong> in the selected purchase order. 
-                Please select a different PO.
-              </div>
-            </div>
+          <div className="bg-yellow-50 p-4 rounded-lg flex items-center text-yellow-800">
+            <AlertCircle className="w-5 h-5 mr-2" />
+            <span>No items found in this Purchase Order.</span>
           </div>
         )}
 
@@ -392,41 +359,36 @@ const CreateGoodsReceiptModal = ({ isOpen, onClose }) => {
             value={formData.notes}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
             className="form-input"
-            rows="3"
-            placeholder="Any additional notes about this goods receipt..."
+            rows="2"
+            placeholder="Optional notes..."
             disabled={createMutation.isPending}
           />
         </div>
 
-        {/* Success Info */}
-        {formData.items.length > 0 && formData.area_id && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <CheckCircle className="w-5 h-5 text-green-600 mr-3 mt-0.5" />
-              <div className="text-sm text-green-800">
-                <strong>Inventory Update:</strong> Creating this GR will automatically add{' '}
-                <strong>{formData.items.reduce((sum, i) => sum + i.quantity_received, 0)} items</strong>{' '}
-                to the <strong>{formData.area_id === '1' ? 'Rawalpindi' : formData.area_id === '2' ? 'Islamabad' : 'Lahore'}</strong> inventory.
-              </div>
+        {/* Final Inventory Confirmation */}
+        {totalAmount > 0 && formData.area_id && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start text-sm text-green-800">
+            <CheckCircle className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0 text-green-600" />
+            <div>
+                Confirming this will add <strong>{formData.items.reduce((acc, i) => acc + (parseInt(i.quantity_received)||0), 0)} items</strong> to inventory.
+                <br/>
+                <span className="text-xs text-green-600">Transactions will be logged automatically.</span>
             </div>
           </div>
         )}
+
       </div>
 
       <ModalFooter>
-        <button
-          onClick={onClose}
-          className="btn btn-outline"
-          disabled={createMutation.isPending}
-        >
+        <button onClick={onClose} className="btn btn-outline" disabled={createMutation.isPending}>
           Cancel
         </button>
-        <button
-          onClick={handleSubmit}
+        <button 
+          onClick={handleSubmit} 
           className="btn btn-primary"
-          disabled={createMutation.isPending || formData.items.length === 0 || loadingPODetails}
+          disabled={createMutation.isPending || formData.items.length === 0 || loadingPODetails || totalAmount === 0}
         >
-          {createMutation.isPending ? 'Creating...' : 'Create Goods Receipt'}
+          {createMutation.isPending ? 'Processing...' : 'Create Goods Receipt'}
         </button>
       </ModalFooter>
     </Modal>
