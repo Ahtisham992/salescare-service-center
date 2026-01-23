@@ -15,7 +15,8 @@ import {
   Truck,
   ShoppingCart,
   Users,
-  Package2, // <--- NEW IMPORT
+  Package2,
+  Database, // <--- NEW IMPORT
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, closeSidebar }) => {
@@ -35,7 +36,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       roles: ["admin", "manager", "technician", "receptionist"],
     },
     {
-      name: "Delivery Orders", // <--- NEW ITEM
+      name: "Delivery Orders",
       href: "/delivery-orders",
       icon: Truck,
       roles: ["admin", "manager", "receptionist"],
@@ -61,7 +62,13 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     {
       name: "Purchase Orders",
       href: "/purchase-orders",
-      icon: ShoppingCart, // <--- Add this import: import { ..., ShoppingCart } from "lucide-react";
+      icon: ShoppingCart,
+      roles: ["admin", "manager"],
+    },
+    {
+      name: "Goods Receipts",
+      href: "/goods-receipts",
+      icon: Package2,
       roles: ["admin", "manager"],
     },
     {
@@ -71,9 +78,9 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       roles: ["admin", "manager"],
     },
     {
-      name: "Goods Receipts",
-      href: "/goods-receipts",
-      icon: Package2,
+      name: "Master Data", // <--- NEW ITEM
+      href: "/master-data",
+      icon: Database,
       roles: ["admin", "manager"],
     },
     {
@@ -90,12 +97,10 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     },
   ];
 
-  // Filter navigation based on user role
   const filteredNavigation = navigation.filter((item) => hasRole(item.roles));
 
   return (
     <>
-      {/* Overlay for mobile */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-gray-900 bg-opacity-50 z-40 lg:hidden"
@@ -103,7 +108,6 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
         ></div>
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-50
@@ -114,7 +118,6 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
         `}
       >
         <div className="flex flex-col h-full">
-          {/* Sidebar Header - Desktop Logo */}
           <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
@@ -125,7 +128,6 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                 <p className="text-xs text-gray-500">Service Center</p>
               </div>
             </div>
-            {/* Close button - Mobile only */}
             <button
               onClick={closeSidebar}
               className="lg:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100"
@@ -134,28 +136,20 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
             </button>
           </div>
 
-          {/* User Info - Mobile Only */}
           <div className="px-6 py-4 border-b border-gray-200 lg:hidden flex-shrink-0">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">
-                  {user?.full_name
-                    ?.split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase()}
+                  {user?.full_name?.split(" ").map((n) => n[0]).join("").toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {user?.full_name}
-                </p>
+                <p className="text-sm font-medium text-gray-900">{user?.full_name}</p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>
           </div>
 
-          {/* Navigation */}
           <nav className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="space-y-1">
               {filteredNavigation.map((item) => (
@@ -191,7 +185,6 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
             </div>
           </nav>
 
-          {/* Sidebar Footer */}
           <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
             <div className="text-xs text-gray-500 text-center">
               <p>© 2026 SalesCare</p>

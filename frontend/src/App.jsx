@@ -26,6 +26,7 @@ import Vendors from "./pages/Vendors";
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
+import MasterData from "./pages/MasterData";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -146,7 +147,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-
+              <Route
+                path="/master-data"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <MasterData />
+                  </ProtectedRoute>
+                }
+              />
               {/* Goods Receipts - Admin, Manager */}
               <Route
                 path="goods-receipts"
