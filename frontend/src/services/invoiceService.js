@@ -23,9 +23,14 @@ const invoiceService = {
     return await apiHelper.post('/invoices/complaint', data);
   },
 
-  // Update invoice status
+  // Update invoice status (Used for Cancelling)
   updateStatus: async (id, status) => {
     return await apiHelper.patch(`/invoices/${id}/status`, { status });
+  },
+
+  // Delete invoice (Admin only)
+  delete: async (id) => {
+    return await apiHelper.delete(`/invoices/${id}`);
   },
 
   // Get invoice statistics

@@ -207,12 +207,14 @@ const getMRQSById = async (req, res) => {
   }
 };
 
+// Search for your existing createMRQS function and replace it with this:
+
 // @desc    Create new MRQS
 // @route   POST /api/requisitions/mrqs
 // @access  Private
 const createMRQS = async (req, res) => {
   try {
-    const { complaint_id, area_id, items } = req.body;
+    const { complaint_id, area_id, items, technician_id } = req.body; // Added technician_id extraction
 
     // Validation
     const validation = validateMRQS(req.body);
@@ -240,11 +242,11 @@ const createMRQS = async (req, res) => {
 
     const complaint = complaintCheck.rows[0];
 
-    if (complaint.status === 'Completed' || complaint.status === 'Cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot create MRQS for completed or cancelled complaint'
-      });
+    // Determine the Technician ID
+    // If Admin/Manager, use the selected technician. If Technician, force their own ID.
+    let assignedTechnician = req.user.user_id;
+    if (['admin', 'manager'].includes(req.user.role) && technician_id) {
+      assignedTechnician = technician_id;
     }
 
     // Verify area
@@ -260,7 +262,7 @@ const createMRQS = async (req, res) => {
       });
     }
 
-    // Verify all items exist and get prices
+    // Verify items and prices
     const itemChecks = await Promise.all(
       items.map(item => 
         query('SELECT item_id, unit_price FROM items WHERE item_id = $1', [item.item_id])
@@ -276,12 +278,10 @@ const createMRQS = async (req, res) => {
       }
     }
 
-    // Generate MRQS number
     const mrqsNumber = await generateMRQSNumber();
 
-    // Create MRQS in transaction
     const result = await transaction(async (client) => {
-      // Insert MRQS header
+      // Insert MRQS header using assignedTechnician
       const mrqsResult = await client.query(`
         INSERT INTO material_requisitions (
           mrqs_number,
@@ -291,7 +291,7 @@ const createMRQS = async (req, res) => {
           status
         ) VALUES ($1, $2, $3, $4, $5)
         RETURNING *
-      `, [mrqsNumber, complaint_id, req.user.user_id, area_id, 'Pending']);
+      `, [mrqsNumber, complaint_id, assignedTechnician, area_id, 'Pending']);
 
       const mrqsId = mrqsResult.rows[0].mrqs_id;
 

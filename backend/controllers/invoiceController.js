@@ -29,6 +29,8 @@ const getAllInvoices = async (req, res) => {
     const params = [];
     let paramCount = 1;
 
+    // --- 1. BUILD FILTERS ---
+
     if (invoice_type) {
       conditions.push(`i.invoice_type = $${paramCount}`);
       params.push(invoice_type);
@@ -60,10 +62,12 @@ const getAllInvoices = async (req, res) => {
     }
 
     if (search) {
+      // FIX: Added d.do_number to search so you can search Counter Sales too
       conditions.push(`(
         i.invoice_number ILIKE $${paramCount} OR
         i.customer_name ILIKE $${paramCount} OR
-        c.complaint_number ILIKE $${paramCount}
+        c.complaint_number ILIKE $${paramCount} OR
+        d.do_number ILIKE $${paramCount}
       )`);
       params.push(`%${search}%`);
       paramCount++;
@@ -71,14 +75,19 @@ const getAllInvoices = async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Get total count
+    // --- 2. GET TOTAL COUNT (FIXED) ---
+    // The error was here. We must JOIN tables because the 'search' uses them (c.complaint_number, etc)
     const countResult = await query(`
-      SELECT COUNT(*) as total FROM invoices i ${whereClause}
+      SELECT COUNT(*) as total 
+      FROM invoices i
+      LEFT JOIN complaints c ON i.complaint_id = c.complaint_id
+      LEFT JOIN delivery_orders d ON i.do_id = d.do_id
+      ${whereClause}
     `, params);
 
     const totalInvoices = parseInt(countResult.rows[0].total);
 
-    // Get invoices
+    // --- 3. GET DATA ---
     params.push(limit, offset);
 
     const result = await query(`
@@ -736,11 +745,44 @@ const getInvoiceStats = async (req, res) => {
   }
 };
 
+const deleteInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if invoice exists
+    const check = await query('SELECT status FROM invoices WHERE invoice_id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    // Optional: Prevent deleting Paid invoices for safety (Business Logic)
+    if (check.rows[0].status === 'Paid') {
+       return res.status(400).json({ success: false, message: 'Cannot delete a Paid invoice. Cancel it instead.' });
+    }
+
+    // Perform Delete
+    await query('DELETE FROM invoices WHERE invoice_id = $1', [id]);
+
+    res.json({
+      success: true,
+      message: 'Invoice deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete invoice'
+    });
+  }
+};
+
 module.exports = {
   getAllInvoices,
   getInvoiceById,
   createComplaintInvoice,
   createCounterSaleInvoice,
   updateInvoiceStatus,
-  getInvoiceStats
+  getInvoiceStats,
+  deleteInvoice 
 };

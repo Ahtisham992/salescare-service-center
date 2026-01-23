@@ -5,139 +5,172 @@
 ```
 salescare-service-center/
 │
-├── backend/
-│   ├── config/
-│   │   ├── database.js          # PostgreSQL connection
-│   │   ├── env.js                # Environment variables
-│   │   └── constants.js          # App constants
+├── API_COLLECTION.md
+│   guide.txt
+│   QUICK_REFERENCE.md
+│   README.md
+│   schema.txt
+│   
+├───backend
+│   │   .env
+│   │   .env.example
+│   │   .gitignore
+│   │   package-lock.json
+│   │   package.json
+│   │   server.js
+│   │   
+│   ├───config
+│   │       database.js
 │   │
-│   ├── middleware/
-│   │   ├── auth.js               # JWT authentication
-│   │   ├── validation.js         # Request validation
-│   │   ├── errorHandler.js       # Global error handling
-│   │   └── logger.js             # Request logging
+│   ├───controllers
+│   │       areaTariffController.js
+│   │       authController.js
+│   │       complaintController.js
+│   │       customerController.js
+│   │       deliveryController.js.js
+│   │       goodsReceiptController.js
+│   │       inventoryController.js
+│   │       invoiceController.js
+│   │       productItemController.js
+│   │       purchaseController.js
+│   │       reportController.js
+│   │       requisitionController.js
+│   │       userController.js
+│   │       vendorController.js
 │   │
-│   ├── models/
-│   │   ├── User.js
-│   │   ├── Customer.js
-│   │   ├── Complaint.js
-│   │   ├── Invoice.js
-│   │   ├── Inventory.js
-│   │   ├── PurchaseOrder.js
-│   │   ├── MaterialRequisition.js
-│   │   └── DeliveryOrder.js
+│   ├───middleware
+│   │       auth.js
 │   │
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── complaintController.js
-│   │   ├── invoiceController.js
-│   │   ├── inventoryController.js
-│   │   ├── purchaseController.js
-│   │   ├── requisitionController.js
-│   │   └── reportController.js
+│   ├───migrations
+│   │       initial_schema.sql
 │   │
-│   ├── routes/
-│   │   ├── auth.routes.js
-│   │   ├── complaint.routes.js
-│   │   ├── invoice.routes.js
-│   │   ├── inventory.routes.js
-│   │   ├── purchase.routes.js
-│   │   └── requisition.routes.js
+│   ├───module report
+│   │       Complaint Management Module.md
+│   │       Inventory & Material Requisition Module.md
+│   │       Invoice Module.md
+│   │       Master Data Management Module.md
+│   │       Purchase Order & Goods Receipt Module.md
+│   │       Reporting Module.md
 │   │
-│   ├── services/
-│   │   ├── inventoryService.js   # Inventory management logic
-│   │   ├── invoiceService.js     # Invoice generation
-│   │   ├── notificationService.js
-│   │   └── pdfService.js         # PDF generation for invoices
+│   ├───routes
+│   │       area.routes.js
+│   │       auth.routes.js
+│   │       complaint.routes.js
+│   │       customer.routes.js
+│   │       delivery.routes.js
+│   │       goodsReceipt.routes.js
+│   │       inventory.routes.js
+│   │       invoice.routes.js
+│   │       item.routes.js
+│   │       product.routes.js
+│   │       purchase.routes.js
+│   │       report.routes.js
+│   │       requisition.routes.js
+│   │       tariff.routes.js
+│   │       user.routes.js
+│   │       vendor.routes.js
 │   │
-│   ├── utils/
-│   │   ├── autoNumber.js         # Auto-generate numbers
-│   │   ├── validators.js
-│   │   └── helpers.js
+│   ├───scripts
+│   │       migrate.js
+│   │       seed.js
 │   │
-│   ├── scripts/
-│   │   ├── seed.js               # Database seeding
-│   │   └── migrate.js            # Migration scripts
+│   ├───services
+│   │       inventoryService.js
+│   │       invoiceService.js
+│   │       reportService.js
 │   │
-│   ├── .env
-│   ├── package.json
-│   └── server.js
+│   ├───tests
+│   │       test-api.js
+│   │       test-complaints.js
+│   │       test-inventory.js
+│   │       test-invoice.js
+│   │       test-master-data.js
+│   │       test-purchase.js
+│   │       test-reports.js
+│   │
+│   └───utils
+│           autoNumber.js
+│           reportHelpers.js
+│           validators.js
 │
-├── frontend/
-│   ├── public/
-│   │   ├── index.html
-│   │   └── favicon.ico
-│   │
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── common/
-│   │   │   │   ├── Navbar.jsx
-│   │   │   │   ├── Sidebar.jsx
-│   │   │   │   ├── DataTable.jsx
-│   │   │   │   ├── Modal.jsx
-│   │   │   │   ├── FormInput.jsx
-│   │   │   │   └── LoadingSpinner.jsx
-│   │   │   │
-│   │   │   ├── complaints/
-│   │   │   │   ├── ComplaintList.jsx
-│   │   │   │   ├── ComplaintForm.jsx
-│   │   │   │   ├── ComplaintDetail.jsx
-│   │   │   │   └── AssignTechnician.jsx
-│   │   │   │
-│   │   │   ├── invoices/
-│   │   │   │   ├── InvoiceList.jsx
-│   │   │   │   ├── InvoiceForm.jsx
-│   │   │   │   ├── InvoicePreview.jsx
-│   │   │   │   └── CounterSaleInvoice.jsx
-│   │   │   │
-│   │   │   ├── inventory/
-│   │   │   │   ├── StockList.jsx
-│   │   │   │   ├── PurchaseOrderForm.jsx
-│   │   │   │   ├── GoodsReceiptForm.jsx
-│   │   │   │   └── StockReport.jsx
-│   │   │   │
-│   │   │   ├── requisitions/
-│   │   │   │   ├── MRQSForm.jsx
-│   │   │   │   ├── MRTSForm.jsx
-│   │   │   │   └── RequisitionList.jsx
-│   │   │   │
-│   │   │   └── dashboard/
-│   │   │       ├── DashboardStats.jsx
-│   │   │       ├── ComplaintChart.jsx
-│   │   │       └── RevenueChart.jsx
-│   │   │
-│   │   ├── pages/
-│   │   │   ├── Login.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── Complaints.jsx
-│   │   │   ├── Invoices.jsx
-│   │   │   ├── Inventory.jsx
-│   │   │   ├── Reports.jsx
-│   │   │   └── Settings.jsx
-│   │   │
-│   │   ├── services/
-│   │   │   ├── api.js            # Axios instance
-│   │   │   ├── authService.js
-│   │   │   ├── complaintService.js
-│   │   │   ├── invoiceService.js
-│   │   │   └── inventoryService.js
-│   │   │
-│   │   ├── context/
-│   │   │   ├── AuthContext.jsx
-│   │   │   └── AppContext.jsx
-│   │   │
-│   │   ├── utils/
-│   │   │   ├── formatters.js
-│   │   │   └── validators.js
-│   │   │
-│   │   ├── App.jsx
-│   │   ├── index.js
-│   │   └── index.css
-│   │
-│   ├── package.json
-│   └── tailwind.config.js
-│
-└── README.md
+└───frontend
+    │   .env
+    │   .gitignore
+    │   package-lock.json
+    │   package.json
+    │   postcss.config.js
+    │   README.md
+    │   tailwind.config.js
+    │
+    ├───public
+    │       favicon.ico
+    │       index.html
+    │       logo192.png
+    │       logo512.png
+    │       manifest.json
+    │       robots.txt
+    │
+    └───src
+        │   App.css
+        │   App.jsx
+        │   App.test.js
+        │   index.css
+        │   index.js
+        │   logo.svg
+        │   reportWebVitals.js
+        │   setupTests.js
+        │
+        ├───components
+        │   ├───common
+        │   │       DataTable.jsx
+        │   │       LoadingSpinner.jsx
+        │   │       Modal.jsx
+        │   │
+        │   ├───dashboard
+        │   │       ComplaintTrendChart.jsx
+        │   │       QuickStats.jsx
+        │   │       RevenueChart.jsx
+        │   │       StatCard.jsx
+        │   │       WarrantyPieChart.jsx
+        │   │
+        │   ├───invoices
+        │   │       CreateComplaintInvoiceModal.jsx
+        │   │       CreateCounterSaleInvoiceModal.jsx
+        │   │       InvoiceViewModal.jsx
+        │   │
+        │   ├───layout
+        │   │       MainLayout.jsx
+        │   │       Navbar.jsx
+        │   │       Sidebar.jsx
+        │   │
+        │   └───reports
+        │           ReportCard.jsx
+        │           ReportFilters.jsx
+        │
+        ├───context
+        │       AuthContext.jsx
+        │
+        ├───pages
+        │       Complaints.jsx
+        │       Dashboard.jsx
+        │       Inventory.jsx
+        │       Invoices.jsx
+        │       Login.jsx
+        │       Reports.jsx
+        │       Settings.jsx
+        │
+        ├───services
+        │       api.js
+        │       authService.js
+        │       complaintService.js
+        │       inventoryService.js
+        │       invoiceService.js
+        │       reportService.js
+        │
+        └───utils
+                exportHelpers.js
+                formatters.js
+                numberToWords.js
 ```
 
 ---

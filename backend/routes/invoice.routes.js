@@ -8,7 +8,8 @@ const {
   createComplaintInvoice,
   createCounterSaleInvoice,
   updateInvoiceStatus,
-  getInvoiceStats
+  getInvoiceStats,
+  deleteInvoice // <--- Imported new controller
 } = require('../controllers/invoiceController');
 
 // Get invoice statistics
@@ -28,5 +29,8 @@ router.post('/counter-sale', authenticate, createCounterSaleInvoice);
 
 // Update invoice status (Admin, Manager only)
 router.patch('/:id/status', authenticate, authorize('admin', 'manager'), updateInvoiceStatus);
+
+// Delete invoice (Admin ONLY)
+router.delete('/:id', authenticate, authorize('admin'), deleteInvoice);
 
 module.exports = router;

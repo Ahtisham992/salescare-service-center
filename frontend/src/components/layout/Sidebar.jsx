@@ -1,64 +1,83 @@
 // frontend/src/components/layout/Sidebar.jsx
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import React from "react";
+import { NavLink } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import {
   LayoutDashboard,
   FileText,
   Receipt,
   Package,
   BarChart3,
+  ClipboardList,
   Settings,
   X,
   ChevronRight,
-} from 'lucide-react';
+  Truck,
+  ShoppingCart // <--- NEW IMPORT
+} from "lucide-react";
 
 const Sidebar = ({ isOpen, closeSidebar }) => {
   const { user, hasRole } = useAuth();
 
   const navigation = [
     {
-      name: 'Dashboard',
-      href: '/dashboard',
+      name: "Dashboard",
+      href: "/dashboard",
       icon: LayoutDashboard,
-      roles: ['admin', 'manager', 'technician', 'receptionist'],
+      roles: ["admin", "manager", "technician", "receptionist"],
     },
     {
-      name: 'Complaints',
-      href: '/complaints',
+      name: "Complaints",
+      href: "/complaints",
       icon: FileText,
-      roles: ['admin', 'manager', 'technician', 'receptionist'],
+      roles: ["admin", "manager", "technician", "receptionist"],
     },
     {
-      name: 'Invoices',
-      href: '/invoices',
+      name: "Delivery Orders", // <--- NEW ITEM
+      href: "/delivery-orders",
+      icon: Truck,
+      roles: ["admin", "manager", "receptionist"],
+    },
+    {
+      name: "Invoices",
+      href: "/invoices",
       icon: Receipt,
-      roles: ['admin', 'manager', 'receptionist'],
+      roles: ["admin", "manager", "receptionist"],
     },
     {
-      name: 'Inventory',
-      href: '/inventory',
+      name: "Requisitions",
+      href: "/requisitions",
+      icon: ClipboardList,
+      roles: ["admin", "manager", "technician"],
+    },
+    {
+      name: "Inventory",
+      href: "/inventory",
       icon: Package,
-      roles: ['admin', 'manager', 'technician'],
+      roles: ["admin", "manager", "technician"],
     },
     {
-      name: 'Reports',
-      href: '/reports',
+      name: "Purchase Orders",
+      href: "/purchase-orders",
+      icon: ShoppingCart, // <--- Add this import: import { ..., ShoppingCart } from "lucide-react";
+      roles: ["admin", "manager"],
+    },
+    {
+      name: "Reports",
+      href: "/reports",
       icon: BarChart3,
-      roles: ['admin', 'manager'],
+      roles: ["admin", "manager"],
     },
     {
-      name: 'Settings',
-      href: '/settings',
+      name: "Settings",
+      href: "/settings",
       icon: Settings,
-      roles: ['admin', 'manager', 'technician', 'receptionist'],
+      roles: ["admin", "manager", "technician", "receptionist"],
     },
   ];
 
   // Filter navigation based on user role
-  const filteredNavigation = navigation.filter(item => 
-    hasRole(item.roles)
-  );
+  const filteredNavigation = navigation.filter((item) => hasRole(item.roles));
 
   return (
     <>
@@ -77,7 +96,7 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
           w-64 bg-white border-r border-gray-200
           transform transition-transform duration-300 ease-in-out
           lg:translate-x-0 flex-shrink-0
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
         <div className="flex flex-col h-full">
@@ -106,11 +125,17 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">
-                  {user?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  {user?.full_name
+                    ?.split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{user?.full_name}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {user?.full_name}
+                </p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>
@@ -127,8 +152,8 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                   className={({ isActive }) =>
                     `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 group ${
                       isActive
-                        ? 'bg-primary-50 text-primary-700 shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        ? "bg-primary-50 text-primary-700 shadow-sm"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                     }`
                   }
                 >
@@ -136,7 +161,9 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
                     <>
                       <item.icon
                         className={`w-5 h-5 mr-3 transition-colors flex-shrink-0 ${
-                          isActive ? 'text-primary-600' : 'text-gray-400 group-hover:text-gray-600'
+                          isActive
+                            ? "text-primary-600"
+                            : "text-gray-400 group-hover:text-gray-600"
                         }`}
                       />
                       <span className="flex-1">{item.name}</span>
