@@ -21,6 +21,8 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import MaterialRequisitions from "./pages/MaterialRequisitions";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import GoodsReceipts from "./pages/GoodsReceipts";
+import Vendors from "./pages/Vendors";
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
@@ -131,6 +133,26 @@ function App() {
                     allowedRoles={["admin", "manager", "receptionist"]}
                   >
                     <DeliveryOrders />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Vendors - Admin, Manager */}
+              <Route
+                path="vendors"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <Vendors />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Goods Receipts - Admin, Manager */}
+              <Route
+                path="goods-receipts"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <GoodsReceipts />
                   </ProtectedRoute>
                 }
               />

@@ -13,7 +13,9 @@ import {
   X,
   ChevronRight,
   Truck,
-  ShoppingCart // <--- NEW IMPORT
+  ShoppingCart,
+  Users,
+  Package2, // <--- NEW IMPORT
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, closeSidebar }) => {
@@ -60,6 +62,18 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       name: "Purchase Orders",
       href: "/purchase-orders",
       icon: ShoppingCart, // <--- Add this import: import { ..., ShoppingCart } from "lucide-react";
+      roles: ["admin", "manager"],
+    },
+    {
+      name: "Vendors",
+      href: "/vendors",
+      icon: Users,
+      roles: ["admin", "manager"],
+    },
+    {
+      name: "Goods Receipts",
+      href: "/goods-receipts",
+      icon: Package2,
       roles: ["admin", "manager"],
     },
     {
