@@ -1,4 +1,4 @@
-// frontend/src/App.jsx
+// frontend/src/App.jsx - UPDATED WITH ALL ROUTES
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -15,7 +15,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Complaints from "./pages/Complaints";
 import Invoices from "./pages/Invoices";
-import DeliveryOrders from "./pages/DeliveryOrders"; // <--- NEW IMPORT
+import DeliveryOrders from "./pages/DeliveryOrders";
 import Inventory from "./pages/Inventory";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
@@ -23,10 +23,12 @@ import MaterialRequisitions from "./pages/MaterialRequisitions";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import GoodsReceipts from "./pages/GoodsReceipts";
 import Vendors from "./pages/Vendors";
+import MasterData from "./pages/MasterData";
+import ServiceTariffs from "./pages/ServiceTariffs";
+import OperationalAreas from "./pages/OperationalAreas"; // <--- NEW IMPORT
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
-import MasterData from "./pages/MasterData";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -34,7 +36,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     },
   },
 });
@@ -59,12 +61,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Access Denied
-          </h1>
-          <p className="text-gray-600">
-            You don't have permission to access this page.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600">You don't have permission to access this page.</p>
         </div>
       </div>
     );
@@ -117,55 +115,34 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              {/* Default redirect to dashboard */}
               <Route index element={<Navigate to="/dashboard" replace />} />
-
-              {/* Dashboard - All authenticated users */}
+              
+              {/* Dashboard */}
               <Route path="dashboard" element={<Dashboard />} />
 
-              {/* Complaints - All authenticated users */}
+              {/* Complaints */}
               <Route path="complaints" element={<Complaints />} />
 
-              {/* Delivery Orders - Admin, Manager, Receptionist */}
+              {/* Delivery Orders */}
               <Route
                 path="delivery-orders"
                 element={
-                  <ProtectedRoute
-                    allowedRoles={["admin", "manager", "receptionist"]}
-                  >
+                  <ProtectedRoute allowedRoles={["admin", "manager", "receptionist"]}>
                     <DeliveryOrders />
                   </ProtectedRoute>
                 }
               />
 
-              {/* Vendors - Admin, Manager */}
-              <Route
-                path="vendors"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
-                    <Vendors />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/master-data"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
-                    <MasterData />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Goods Receipts - Admin, Manager */}
-              <Route
-                path="goods-receipts"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
-                    <GoodsReceipts />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Invoices */}
+              <Route path="invoices" element={<Invoices />} />
 
-              {/* Purchase Orders - Admin, Manager */}
+              {/* Material Requisitions */}
+              <Route path="requisitions" element={<MaterialRequisitions />} />
+
+              {/* Inventory */}
+              <Route path="inventory" element={<Inventory />} />
+
+              {/* Purchase Orders */}
               <Route
                 path="purchase-orders"
                 element={
@@ -175,13 +152,57 @@ function App() {
                 }
               />
 
-              {/* Invoices - All authenticated users */}
-              <Route path="invoices" element={<Invoices />} />
+              {/* Goods Receipts */}
+              <Route
+                path="goods-receipts"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <GoodsReceipts />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* Inventory - All authenticated users */}
-              <Route path="inventory" element={<Inventory />} />
+              {/* Vendors */}
+              <Route
+                path="vendors"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <Vendors />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* Reports - Admin and Manager only */}
+              {/* Master Data Hub */}
+              <Route
+                path="master-data"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <MasterData />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Service Tariffs */}
+              <Route
+                path="master-data/tariffs"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <ServiceTariffs />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Operational Areas - NEW ROUTE */}
+              <Route
+                path="operational-areas"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <OperationalAreas />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Reports */}
               <Route
                 path="reports"
                 element={
@@ -190,9 +211,8 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route path="requisitions" element={<MaterialRequisitions />} />
 
-              {/* Settings - All authenticated users */}
+              {/* Settings */}
               <Route path="settings" element={<Settings />} />
             </Route>
 
@@ -202,9 +222,7 @@ function App() {
               element={
                 <div className="min-h-screen flex items-center justify-center">
                   <div className="text-center">
-                    <h1 className="text-6xl font-bold text-gray-900 mb-4">
-                      404
-                    </h1>
+                    <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
                     <p className="text-xl text-gray-600 mb-8">Page not found</p>
                     <a href="/dashboard" className="btn btn-primary">
                       Go to Dashboard

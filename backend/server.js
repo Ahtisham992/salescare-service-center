@@ -50,8 +50,8 @@ app.use('/api/vendors', require('./routes/vendor.routes'));
 app.use('/api/goods-receipts', require('./routes/goodsReceipt.routes'));
 app.use('/api/products', require('./routes/product.routes'));
 app.use('/api/items', require('./routes/item.routes'));
-app.use('/api/operational-areas', require('./routes/area.routes'));
-app.use('/api/service-tariffs', require('./routes/tariff.routes'));
+app.use('/api/areas', require('./routes/area.routes'));
+app.use('/api/tariffs', require('./routes/tariff.routes'));
 
 // 404 handler
 app.use((req, res) => {
