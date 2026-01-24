@@ -27,9 +27,10 @@ const requisitionService = {
     return await apiHelper.patch(`/requisitions/mrqs/${id}/issue`);
   },
 
-  // Reject MRQS
-  rejectMRQS: async (id) => {
-    return await apiHelper.patch(`/requisitions/mrqs/${id}/reject`);
+ // Reject MRQS
+  rejectMRQS: async (id, data) => {
+    // Pass 'data' as the second argument to apiHelper.patch
+    return await apiHelper.patch(`/requisitions/mrqs/${id}/reject`, data);
   },
 
    // Get Technicians (Helper for dropdown)

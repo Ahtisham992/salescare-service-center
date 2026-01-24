@@ -10,6 +10,7 @@ import {
   BarChart3,
   ClipboardList,
   Settings,
+  CheckSquare,
   X,
   ChevronRight,
   Truck,
@@ -52,6 +53,12 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       href: "/requisitions",
       icon: ClipboardList,
       roles: ["admin", "manager", "technician"],
+    },
+    {
+      name: "Approvals",
+      href: "/approvals",
+      icon: CheckSquare,
+      roles: ["admin", "manager"],
     },
     {
       name: "Inventory",
@@ -140,11 +147,17 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">
-                  {user?.full_name?.split(" ").map((n) => n[0]).join("").toUpperCase()}
+                  {user?.full_name
+                    ?.split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{user?.full_name}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {user?.full_name}
+                </p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>

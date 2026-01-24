@@ -29,6 +29,7 @@ import OperationalAreas from "./pages/OperationalAreas"; // <--- NEW IMPORT
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
+import Approvals from "./pages/Approvals";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -61,8 +62,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600">You don't have permission to access this page.</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Access Denied
+          </h1>
+          <p className="text-gray-600">
+            You don't have permission to access this page.
+          </p>
         </div>
       </div>
     );
@@ -116,7 +121,7 @@ function App() {
               }
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
-              
+
               {/* Dashboard */}
               <Route path="dashboard" element={<Dashboard />} />
 
@@ -127,7 +132,9 @@ function App() {
               <Route
                 path="delivery-orders"
                 element={
-                  <ProtectedRoute allowedRoles={["admin", "manager", "receptionist"]}>
+                  <ProtectedRoute
+                    allowedRoles={["admin", "manager", "receptionist"]}
+                  >
                     <DeliveryOrders />
                   </ProtectedRoute>
                 }
@@ -191,6 +198,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="approvals"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <Approvals />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Operational Areas - NEW ROUTE */}
               <Route
@@ -222,7 +237,9 @@ function App() {
               element={
                 <div className="min-h-screen flex items-center justify-center">
                   <div className="text-center">
-                    <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
+                    <h1 className="text-6xl font-bold text-gray-900 mb-4">
+                      404
+                    </h1>
                     <p className="text-xl text-gray-600 mb-8">Page not found</p>
                     <a href="/dashboard" className="btn btn-primary">
                       Go to Dashboard

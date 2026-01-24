@@ -1,6 +1,7 @@
 // backend/controllers/purchaseController.js
 const { query, transaction } = require('../config/database');
 const { generatePONumber } = require('../utils/autoNumber');
+const { logApprovalAction } = require('./approvalController'); // ← WRONG
 
 // @desc    Get all purchase orders
 // @route   GET /api/purchase-orders
@@ -185,18 +186,16 @@ const getPurchaseOrderById = async (req, res) => {
   }
 };
 
-// @desc    Create purchase order
+
+// @desc    Create purchase order (UPDATED)
 // @route   POST /api/purchase-orders
 // @access  Private
 const createPurchaseOrder = async (req, res) => {
   try {
-    const {
-      vendor_id,
-      po_date,
-      items
-    } = req.body;
+    const { vendor_id, po_date, items } = req.body;
 
-    // Validation
+    // ... (Keep all existing validation logic) ...
+
     if (!vendor_id || !po_date) {
       return res.status(400).json({
         success: false,
@@ -211,7 +210,6 @@ const createPurchaseOrder = async (req, res) => {
       });
     }
 
-    // Validate all items
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (!item.item_id || !item.quantity || item.quantity <= 0 || !item.unit_price || item.unit_price < 0) {
@@ -222,7 +220,6 @@ const createPurchaseOrder = async (req, res) => {
       }
     }
 
-    // Verify vendor exists
     const vendorCheck = await query(
       'SELECT vendor_id, is_active FROM vendors WHERE vendor_id = $1',
       [vendor_id]
@@ -242,7 +239,6 @@ const createPurchaseOrder = async (req, res) => {
       });
     }
 
-    // Verify all items exist
     const itemChecks = await Promise.all(
       items.map(item => 
         query('SELECT item_id FROM items WHERE item_id = $1', [item.item_id])
@@ -258,15 +254,11 @@ const createPurchaseOrder = async (req, res) => {
       }
     }
 
-    // Generate PO number
     const poNumber = await generatePONumber();
 
-    // Create PO in transaction
     const result = await transaction(async (client) => {
-      // Calculate total
       let totalAmount = 0;
 
-      // Insert PO header
       const poResult = await client.query(`
         INSERT INTO purchase_orders (
           po_number,
@@ -280,7 +272,6 @@ const createPurchaseOrder = async (req, res) => {
 
       const poId = poResult.rows[0].po_id;
 
-      // Insert PO items
       const poItems = [];
       for (const item of items) {
         const amount = item.quantity * item.unit_price;
@@ -306,7 +297,6 @@ const createPurchaseOrder = async (req, res) => {
         poItems.push(itemResult.rows[0]);
       }
 
-      // Update PO total
       await client.query(`
         UPDATE purchase_orders
         SET total_amount = $1
@@ -319,9 +309,21 @@ const createPurchaseOrder = async (req, res) => {
       };
     });
 
+    // ✅ NEW: Log approval action
+    await logApprovalAction({
+      documentType: 'PO',
+      documentId: result.po.po_id,
+      documentNumber: poNumber,
+      action: 'Submitted',
+      previousStatus: null,
+      newStatus: 'pending',
+      performedBy: req.user.user_id,
+      comments: 'Purchase order created and submitted for approval'
+    });
+
     res.status(201).json({
       success: true,
-      message: 'Purchase order created successfully',
+      message: 'Purchase order created successfully and submitted for approval',
       data: result
     });
 
@@ -334,12 +336,35 @@ const createPurchaseOrder = async (req, res) => {
   }
 };
 
-// @desc    Approve purchase order
+// @desc    Approve purchase order (UPDATED)
 // @route   PATCH /api/purchase-orders/:id/approve
 // @access  Private (Admin, Manager)
 const approvePurchaseOrder = async (req, res) => {
   try {
     const { id } = req.params;
+    const { comments } = req.body;
+
+    // Get PO details for logging
+    const poCheck = await query(
+      'SELECT po_id, po_number, status FROM purchase_orders WHERE po_id = $1',
+      [id]
+    );
+
+    if (poCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found'
+      });
+    }
+
+    const po = poCheck.rows[0];
+
+    if (po.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending purchase orders can be approved'
+      });
+    }
 
     const result = await query(`
       UPDATE purchase_orders
@@ -354,6 +379,18 @@ const approvePurchaseOrder = async (req, res) => {
         message: 'Purchase order not found or already processed'
       });
     }
+
+    // ✅ NEW: Log approval action
+    await logApprovalAction({
+      documentType: 'PO',
+      documentId: po.po_id,
+      documentNumber: po.po_number,
+      action: 'Approved',
+      previousStatus: 'pending',
+      newStatus: 'approved',
+      performedBy: req.user.user_id,
+      comments: comments || 'Purchase order approved'
+    });
 
     res.json({
       success: true,
@@ -370,14 +407,14 @@ const approvePurchaseOrder = async (req, res) => {
   }
 };
 
-// @desc    Cancel purchase order
+// @desc    Cancel purchase order (UPDATED)
 // @route   PATCH /api/purchase-orders/:id/cancel
 // @access  Private (Admin, Manager)
 const cancelPurchaseOrder = async (req, res) => {
   try {
     const { id } = req.params;
+    const { cancellation_reason } = req.body;
 
-    // Check if any goods received
     const grCheck = await query(
       'SELECT gr_id FROM goods_receipts WHERE po_id = $1 LIMIT 1',
       [id]
@@ -389,6 +426,21 @@ const cancelPurchaseOrder = async (req, res) => {
         message: 'Cannot cancel purchase order with goods receipts'
       });
     }
+
+    // Get PO details
+    const poCheck = await query(
+      'SELECT po_id, po_number, status FROM purchase_orders WHERE po_id = $1',
+      [id]
+    );
+
+    if (poCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase order not found'
+      });
+    }
+
+    const po = poCheck.rows[0];
 
     const result = await query(`
       UPDATE purchase_orders
@@ -403,6 +455,18 @@ const cancelPurchaseOrder = async (req, res) => {
         message: 'Purchase order not found or cannot be cancelled'
       });
     }
+
+    // ✅ NEW: Log cancellation
+    await logApprovalAction({
+      documentType: 'PO',
+      documentId: po.po_id,
+      documentNumber: po.po_number,
+      action: 'Cancelled',
+      previousStatus: po.status,
+      newStatus: 'cancelled',
+      performedBy: req.user.user_id,
+      rejectionReason: cancellation_reason || 'Purchase order cancelled by user'
+    });
 
     res.json({
       success: true,

@@ -52,6 +52,8 @@ app.use('/api/products', require('./routes/product.routes'));
 app.use('/api/items', require('./routes/item.routes'));
 app.use('/api/areas', require('./routes/area.routes'));
 app.use('/api/tariffs', require('./routes/tariff.routes'));
+app.use('/api/approvals', require('./routes/approval.routes'));
+
 
 // 404 handler
 app.use((req, res) => {

@@ -3,6 +3,7 @@ const { query, transaction } = require('../config/database');
 const { generateMRQSNumber, generateMRTSNumber } = require('../utils/autoNumber');
 const { validateMRQS, validateMRTS } = require('../utils/validators');
 const { checkStockAvailability, processMRQSIssue, processMRTSReturn } = require('../services/inventoryService');
+const { logApprovalAction } = require('./approvalController');
 
 // ============================================
 // MRQS (Material Requisition Slip) Operations
@@ -208,15 +209,13 @@ const getMRQSById = async (req, res) => {
 };
 
 // Search for your existing createMRQS function and replace it with this:
-
-// @desc    Create new MRQS
+// @desc    Create new MRQS (UPDATED)
 // @route   POST /api/requisitions/mrqs
 // @access  Private
 const createMRQS = async (req, res) => {
   try {
-    const { complaint_id, area_id, items, technician_id } = req.body; // Added technician_id extraction
+    const { complaint_id, area_id, items, technician_id } = req.body;
 
-    // Validation
     const validation = validateMRQS(req.body);
     if (!validation.isValid) {
       return res.status(400).json({
@@ -226,7 +225,6 @@ const createMRQS = async (req, res) => {
       });
     }
 
-    // Verify complaint exists and get details
     const complaintCheck = await query(`
       SELECT c.complaint_id, c.status, c.area_id
       FROM complaints c
@@ -240,16 +238,11 @@ const createMRQS = async (req, res) => {
       });
     }
 
-    const complaint = complaintCheck.rows[0];
-
-    // Determine the Technician ID
-    // If Admin/Manager, use the selected technician. If Technician, force their own ID.
     let assignedTechnician = req.user.user_id;
     if (['admin', 'manager'].includes(req.user.role) && technician_id) {
       assignedTechnician = technician_id;
     }
 
-    // Verify area
     const areaCheck = await query(
       'SELECT area_id FROM operational_areas WHERE area_id = $1',
       [area_id]
@@ -262,7 +255,6 @@ const createMRQS = async (req, res) => {
       });
     }
 
-    // Verify items and prices
     const itemChecks = await Promise.all(
       items.map(item => 
         query('SELECT item_id, unit_price FROM items WHERE item_id = $1', [item.item_id])
@@ -281,7 +273,6 @@ const createMRQS = async (req, res) => {
     const mrqsNumber = await generateMRQSNumber();
 
     const result = await transaction(async (client) => {
-      // Insert MRQS header using assignedTechnician
       const mrqsResult = await client.query(`
         INSERT INTO material_requisitions (
           mrqs_number,
@@ -295,7 +286,6 @@ const createMRQS = async (req, res) => {
 
       const mrqsId = mrqsResult.rows[0].mrqs_id;
 
-      // Insert MRQS items
       const mrqsItems = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -323,9 +313,21 @@ const createMRQS = async (req, res) => {
       };
     });
 
+    // ✅ NEW: Log approval action
+    await logApprovalAction({
+      documentType: 'MRQS',
+      documentId: result.mrqs.mrqs_id,
+      documentNumber: mrqsNumber,
+      action: 'Submitted',
+      previousStatus: null,
+      newStatus: 'Pending',
+      performedBy: req.user.user_id,
+      comments: 'MRQS created and submitted for approval'
+    });
+
     res.status(201).json({
       success: true,
-      message: 'MRQS created successfully',
+      message: 'MRQS created successfully and submitted for approval',
       data: result
     });
 
@@ -338,14 +340,14 @@ const createMRQS = async (req, res) => {
   }
 };
 
-// @desc    Approve MRQS
+// @desc    Approve MRQS (UPDATED)
 // @route   PATCH /api/requisitions/mrqs/:id/approve
 // @access  Private (Admin, Manager)
 const approveMRQS = async (req, res) => {
   try {
     const { id } = req.params;
+    const { comments } = req.body;
 
-    // Get MRQS details
     const mrqsCheck = await query(`
       SELECT m.*, 
         (SELECT json_agg(mi.*) FROM mrqs_items mi WHERE mi.mrqs_id = m.mrqs_id) as items
@@ -369,7 +371,6 @@ const approveMRQS = async (req, res) => {
       });
     }
 
-    // Check stock availability
     const stockCheck = await checkStockAvailability(mrqs.items, mrqs.area_id);
 
     if (!stockCheck.available) {
@@ -382,12 +383,23 @@ const approveMRQS = async (req, res) => {
       });
     }
 
-    // Update status to Approved
     await query(`
       UPDATE material_requisitions
       SET status = 'Approved'
       WHERE mrqs_id = $1
     `, [id]);
+
+    // ✅ NEW: Log approval action
+    await logApprovalAction({
+      documentType: 'MRQS',
+      documentId: mrqs.mrqs_id,
+      documentNumber: mrqs.mrqs_number,
+      action: 'Approved',
+      previousStatus: 'Pending',
+      newStatus: 'Approved',
+      performedBy: req.user.user_id,
+      comments: comments || 'MRQS approved'
+    });
 
     res.json({
       success: true,
@@ -403,14 +415,83 @@ const approveMRQS = async (req, res) => {
   }
 };
 
-// @desc    Issue materials (deduct from inventory)
+// @desc    Reject MRQS (UPDATED)
+// @route   PATCH /api/requisitions/mrqs/:id/reject
+// @access  Private (Admin, Manager)
+const rejectMRQS = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejection_reason } = req.body;
+
+    if (!rejection_reason || rejection_reason.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Rejection reason is required'
+      });
+    }
+
+    const mrqsCheck = await query(
+      'SELECT mrqs_id, mrqs_number, status FROM material_requisitions WHERE mrqs_id = $1',
+      [id]
+    );
+
+    if (mrqsCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'MRQS not found'
+      });
+    }
+
+    const mrqs = mrqsCheck.rows[0];
+
+    if (mrqs.status !== 'Pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only pending MRQS can be rejected'
+      });
+    }
+
+    const result = await query(`
+      UPDATE material_requisitions
+      SET status = 'Rejected'
+      WHERE mrqs_id = $1
+      RETURNING *
+    `, [id]);
+
+    // ✅ NEW: Log approval action
+    await logApprovalAction({
+      documentType: 'MRQS',
+      documentId: mrqs.mrqs_id,
+      documentNumber: mrqs.mrqs_number,
+      action: 'Rejected',
+      previousStatus: 'Pending',
+      newStatus: 'Rejected',
+      performedBy: req.user.user_id,
+      rejectionReason: rejection_reason
+    });
+
+    res.json({
+      success: true,
+      message: 'MRQS rejected',
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Reject MRQS error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reject MRQS'
+    });
+  }
+};
+
+// @desc    Issue materials (UPDATED with logging)
 // @route   PATCH /api/requisitions/mrqs/:id/issue
 // @access  Private (Admin, Manager)
 const issueMRQS = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get MRQS details
     const mrqsCheck = await query(`
       SELECT m.*, 
         (SELECT json_agg(mi.*) FROM mrqs_items mi WHERE mi.mrqs_id = m.mrqs_id) as items
@@ -434,7 +515,6 @@ const issueMRQS = async (req, res) => {
       });
     }
 
-    // Process inventory deduction
     const inventoryResults = await processMRQSIssue(
       mrqs.mrqs_id,
       mrqs.mrqs_number,
@@ -443,14 +523,12 @@ const issueMRQS = async (req, res) => {
       req.user.user_id
     );
 
-    // Update MRQS status to Issued
     await query(`
       UPDATE material_requisitions
       SET status = 'Issued'
       WHERE mrqs_id = $1
     `, [id]);
 
-    // Update complaint parts amount
     const totalPartsAmount = mrqs.items.reduce((sum, item) => sum + parseFloat(item.amount), 0);
     
     await query(`
@@ -460,6 +538,18 @@ const issueMRQS = async (req, res) => {
         total_service_amount = COALESCE(selected_service_charge, 0) + COALESCE(parts_amount, 0) + $1
       WHERE complaint_id = $2
     `, [totalPartsAmount, mrqs.complaint_id]);
+
+    // ✅ NEW: Log issue action
+    await logApprovalAction({
+      documentType: 'MRQS',
+      documentId: mrqs.mrqs_id,
+      documentNumber: mrqs.mrqs_number,
+      action: 'Approved',
+      previousStatus: 'Approved',
+      newStatus: 'Issued',
+      performedBy: req.user.user_id,
+      comments: 'Materials issued and inventory updated'
+    });
 
     res.json({
       success: true,
@@ -474,42 +564,6 @@ const issueMRQS = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to issue materials'
-    });
-  }
-};
-
-// @desc    Reject MRQS
-// @route   PATCH /api/requisitions/mrqs/:id/reject
-// @access  Private (Admin, Manager)
-const rejectMRQS = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await query(`
-      UPDATE material_requisitions
-      SET status = 'Rejected'
-      WHERE mrqs_id = $1 AND status = 'Pending'
-      RETURNING *
-    `, [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'MRQS not found or already processed'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'MRQS rejected',
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Reject MRQS error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reject MRQS'
     });
   }
 };
