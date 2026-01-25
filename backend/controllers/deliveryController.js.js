@@ -174,6 +174,7 @@ const getDeliveryOrderById = async (req, res) => {
 // @desc    Create delivery order
 // @route   POST /api/delivery-orders
 // @access  Private
+
 const createDeliveryOrder = async (req, res) => {
   try {
     const {
@@ -182,64 +183,84 @@ const createDeliveryOrder = async (req, res) => {
       address,
       cnic,
       area_id,
-      items
+      items // [{ item_id, quantity, unit_price, gst_percentage }]
     } = req.body;
 
     // Validation
-    if (!customer_name || !phone || !area_id) {
+    if (!customer_name || !phone || !area_id || !items || items.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Customer name, phone, and area are required'
+        message: 'Customer name, phone, area, and items are required'
       });
     }
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one item is required'
-      });
-    }
-
-    // Validate all items
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item.item_id || !item.quantity || item.quantity <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Item ${i + 1}: Valid item ID and quantity are required`
-        });
-      }
-    }
-
-    // Check stock availability
-    const stockCheck = await checkStockAvailability(items, area_id);
-
-    if (!stockCheck.available) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient stock for some items',
-        data: {
-          unavailable_items: stockCheck.unavailableItems
-        }
-      });
-    }
-
-    // Get item prices
-    const itemPrices = await Promise.all(
-      items.map(item => 
-        query('SELECT item_id, unit_price FROM items WHERE item_id = $1', [item.item_id])
-      )
+    // STEP 1: Check if customer exists in customers table
+    let customerId;
+    
+    const existingCustomer = await query(
+      'SELECT customer_id FROM customers WHERE phone = $1',
+      [phone]
     );
 
+    if (existingCustomer.rows.length > 0) {
+      // Customer exists, use existing customer_id
+      customerId = existingCustomer.rows[0].customer_id;
+      
+      // Optionally update customer info if it changed
+      await query(`
+        UPDATE customers 
+        SET name = $1, address = $2, cnic = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE customer_id = $4
+      `, [customer_name, address, cnic, customerId]);
+      
+    } else {
+      // STEP 2: Customer doesn't exist - CREATE NEW CUSTOMER
+      const newCustomer = await query(`
+        INSERT INTO customers (name, phone, address, cnic)
+        VALUES ($1, $2, $3, $4)
+        RETURNING customer_id
+      `, [customer_name, phone, address, cnic]);
+      
+      customerId = newCustomer.rows[0].customer_id;
+    }
+
+    // Get area code for DO number
+    const areaData = await query(
+      'SELECT area_code FROM operational_areas WHERE area_id = $1',
+      [area_id]
+    );
+
+    if (areaData.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Area not found'
+      });
+    }
+
+    const areaCode = areaData.rows[0].area_code;
+
     // Generate DO number
-    const doNumber = await generateDONumber();
+    const doNumber = await generateDONumber(areaCode);
+
+    // Calculate totals
+    let totalAmount = 0;
+    const processedItems = items.map(item => {
+      const amount = parseFloat(item.quantity) * parseFloat(item.unit_price);
+      const gstAmount = amount * (parseFloat(item.gst_percentage || 0) / 100);
+      const lineTotal = amount + gstAmount;
+      totalAmount += lineTotal;
+
+      return {
+        ...item,
+        amount,
+        gst_amount: gstAmount,
+        line_total: lineTotal
+      };
+    });
 
     // Create DO in transaction
     const result = await transaction(async (client) => {
-      // Calculate total
-      let totalAmount = 0;
-
-      // Insert DO header
+      // Insert delivery order
       const doResult = await client.query(`
         INSERT INTO delivery_orders (
           do_number,
@@ -248,37 +269,28 @@ const createDeliveryOrder = async (req, res) => {
           address,
           cnic,
           area_id,
+          total_amount,
           status,
           created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `, [
         doNumber,
         customer_name,
         phone,
-        address || null,
-        cnic || null,
+        address,
+        cnic,
         area_id,
+        totalAmount,
         'Pending',
         req.user.user_id
       ]);
 
-      const doId = doResult.rows[0].do_id;
+      const deliveryOrder = doResult.rows[0];
 
       // Insert DO items
-      const doItems = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const unitPrice = parseFloat(itemPrices[i].rows[0].unit_price);
-        const gstPercentage = item.gst_percentage || 18;
-        
-        const lineTotal = item.quantity * unitPrice;
-        const gstAmount = (lineTotal * gstPercentage) / 100;
-        const itemTotal = lineTotal + gstAmount;
-
-        totalAmount += itemTotal;
-
-        const itemResult = await client.query(`
+      for (const item of processedItems) {
+        await client.query(`
           INSERT INTO do_items (
             do_id,
             item_id,
@@ -288,44 +300,34 @@ const createDeliveryOrder = async (req, res) => {
             gst_amount,
             line_total
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-          RETURNING *
         `, [
-          doId,
+          deliveryOrder.do_id,
           item.item_id,
           item.quantity,
-          unitPrice,
-          gstPercentage,
-          gstAmount,
-          itemTotal
+          item.unit_price,
+          item.gst_percentage || 0,
+          item.gst_amount,
+          item.line_total
         ]);
-
-        doItems.push(itemResult.rows[0]);
       }
 
-      // Update DO total
-      await client.query(`
-        UPDATE delivery_orders
-        SET total_amount = $1
-        WHERE do_id = $2
-      `, [totalAmount, doId]);
-
-      return {
-        do: { ...doResult.rows[0], total_amount: totalAmount },
-        items: doItems
-      };
+      return deliveryOrder;
     });
 
     res.status(201).json({
       success: true,
-      message: 'Delivery order created successfully',
-      data: result
+      message: 'Delivery order created successfully. Customer added to database.',
+      data: {
+        ...result,
+        customer_id: customerId // Return the customer ID for reference
+      }
     });
 
   } catch (error) {
     console.error('Create delivery order error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to create delivery order'
+      message: 'Failed to create delivery order'
     });
   }
 };

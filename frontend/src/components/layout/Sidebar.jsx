@@ -16,7 +16,7 @@ import {
   Truck,
   ShoppingCart,
   Users,
-  Package2,
+  Package2, Clock, TrendingUp,
   Database, // <--- NEW IMPORT
 } from "lucide-react";
 
@@ -59,6 +59,18 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
       href: "/approvals",
       icon: CheckSquare,
       roles: ["admin", "manager"],
+    },
+    {
+      name: "Complaint Aging",
+      href: "/reports/complaint-aging", // Changed 'path' to 'href'
+      icon: Clock,
+      roles: ["admin", "manager"], // Added roles (adjust as needed)
+    },
+    {
+      name: "Stock Movement",
+      href: "/reports/stock-movement", // Changed 'path' to 'href'
+      icon: TrendingUp,
+      roles: ["admin", "manager"], // Added roles (adjust as needed)
     },
     {
       name: "Inventory",

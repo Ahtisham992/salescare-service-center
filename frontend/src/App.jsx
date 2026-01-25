@@ -30,6 +30,8 @@ import OperationalAreas from "./pages/OperationalAreas"; // <--- NEW IMPORT
 // Layout
 import MainLayout from "./components/layout/MainLayout";
 import Approvals from "./pages/Approvals";
+import ComplaintAgingReport from "./pages/ComplaintAgingReport";
+import StockMovementReport from "./pages/StockMovementReport";
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -213,6 +215,22 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={["admin", "manager"]}>
                     <OperationalAreas />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports/complaint-aging"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <ComplaintAgingReport />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reports/stock-movement"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "manager"]}>
+                    <StockMovementReport />
                   </ProtectedRoute>
                 }
               />

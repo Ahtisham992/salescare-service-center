@@ -1,0 +1,202 @@
+PS D:\salescare-service-center\frontend\src> tree /f
+Folder PATH listing for volume New Volume
+Volume serial number is EC71-1AF8
+D:.
+│   App.css
+│   App.jsx
+│   App.test.js
+│   index.css
+│   index.js
+│   logo.svg
+│   reportWebVitals.js
+│   setupTests.js
+│   
+├───components
+│   ├───common
+│   │       ConfirmationModal.jsx
+│   │       DataTable.jsx
+│   │       LoadingSpinner.jsx
+│   │       Modal.jsx
+│   │       
+│   ├───dashboard
+│   │       ComplaintTrendChart.jsx
+│   │       QuickStats.jsx
+│   │       RevenueChart.jsx
+│   │       StatCard.jsx
+│   │       WarrantyPieChart.jsx
+│   │
+│   ├───delivery
+│   │       CreateDeliveryOrderModal.jsx
+│   │
+│   ├───goods-receipt
+│   │       CreateGoodsReceiptModal.jsx
+│   │       ViewGoodsReceiptModal.jsx
+│   │
+│   ├───invoices
+│   │       CreateComplaintInvoiceModal.jsx
+│   │       CreateCounterSaleInvoiceModal.jsx
+│   │       InvoiceViewModal.jsx
+│   │
+│   ├───layout
+│   │       MainLayout.jsx
+│   │       Navbar.jsx
+│   │       Sidebar.jsx
+│   │
+│   ├───master-data
+│   │       AreaFormModal.jsx
+│   │       ItemFormModal.jsx
+│   │       ProductFormModal.jsx
+│   │       TariffFormModal.jsx
+│   │
+│   ├───purchase
+│   │       ApprovePOModal.jsx
+│   │       CreatePurchaseOrderModal.jsx
+│   │       ViewPurchaseOrderModal.jsx
+│   │
+│   ├───reports
+│   │       ReportCard.jsx
+│   │       ReportFilters.jsx
+│   │
+│   ├───requisitions
+│   │       ApproveMRQSModal.jsx
+│   │       CreateMRQSModal.jsx
+│   │
+│   └───vendors
+│           CreateVendorModal.jsx
+│           EditVendorModal.jsx
+│
+├───context
+│       AuthContext.jsx
+│
+├───pages
+│       Approvals.jsx
+│       ComplaintAgingReport.jsx
+│       Complaints.jsx
+│       Dashboard.jsx
+│       DeliveryOrders.jsx
+│       GoodsReceipts.jsx
+│       Inventory.jsx
+│       Invoices.jsx
+│       Login.jsx
+│       MasterData.jsx
+│       MaterialRequisitions.jsx
+│       OperationalAreas.jsx
+│       PurchaseOrders.jsx
+│       Reports.jsx
+│       ServiceTariffs.jsx
+│       Settings.jsx
+│       StockMovementReport.jsx
+│       Vendors.jsx
+│
+├───services
+│       api.js
+│       approvalService.js
+│       authService.js
+│       complaintService.js
+│       deliveryService.js
+│       goodsReceiptService.js
+│       inventoryService.js
+│       invoiceService.js
+│       masterDataService.js
+│       purchaseService.js
+│       reportService.js
+│       requisitionService.js
+│       tariffService.js
+│       vendorService.js
+│
+└───utils
+        exportHelpers.js
+        formatters.js
+        numberToWords.js
+
+PS D:\salescare-service-center\frontend\src> 
+
+
+PS D:\salescare-service-center\backend> tree /f   
+Folder PATH listing for volume New Volume
+Volume serial number is EC71-1AF8
+D:.
+│   .env
+│   .env.example
+│   .gitignore
+│   package-lock.json
+│   package.json
+│   server.js
+│
+├───config
+│       database.js
+│
+├───controllers
+│       approvalController.js
+│       areaTariffController.js
+│       authController.js
+│       complaintController.js
+│       customerController.js
+│       deliveryController.js.js
+│       goodsReceiptController.js
+│       inventoryController.js
+│       invoiceController.js
+│       productItemController.js
+│       purchaseController.js
+│       reportController.js
+│       requisitionController.js
+│       userController.js
+│       vendorController.js
+│
+├───middleware
+│       auth.js
+│
+├───migrations
+│       initial_schema.sql
+│
+├───module report
+│       Complaint Management Module.md
+│       Inventory & Material Requisition Module.md
+│       Invoice Module.md
+│       Master Data Management Module.md
+│       Purchase Order & Goods Receipt Module.md
+│       Reporting Module.md
+│
+├───routes
+│       approval.routes.js
+│       area.routes.js
+│       auth.routes.js
+│       complaint.routes.js
+│       customer.routes.js
+│       delivery.routes.js
+│       goodsReceipt.routes.js
+│       inventory.routes.js
+│       invoice.routes.js
+│       item.routes.js
+│       product.routes.js
+│       purchase.routes.js
+│       report.routes.js
+│       requisition.routes.js
+│       tariff.routes.js
+│       user.routes.js
+│       vendor.routes.js
+│
+├───scripts
+│       migrate.js
+│       seed.js
+│
+├───services
+│       inventoryService.js
+│       invoiceService.js
+│       reportService.js
+│
+├───tests
+│       test-api.js
+│       test-complaints.js
+│       test-inventory.js
+│       test-invoice.js
+│       test-master-data.js
+│       test-purchase.js
+│       test-reports.js
+│
+└───utils
+        autoNumber.js
+        reportHelpers.js
+        validators.js
+
+PS D:\salescare-service-center\backend> 
