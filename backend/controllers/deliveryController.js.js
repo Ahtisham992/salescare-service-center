@@ -1,4 +1,4 @@
-// backend/controllers/deliveryController.js
+// backend/controllers/deliveryController.js - UPDATED TO USE SELLING PRICE
 const { query, transaction } = require('../config/database');
 const { generateDONumber } = require('../utils/autoNumber');
 const { processDOIssue, checkStockAvailability } = require('../services/inventoryService');
@@ -60,14 +60,12 @@ const getAllDeliveryOrders = async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Get total count
     const countResult = await query(`
       SELECT COUNT(*) as total FROM delivery_orders d ${whereClause}
     `, params);
 
     const totalDOs = parseInt(countResult.rows[0].total);
 
-    // Get delivery orders
     params.push(limit, offset);
 
     const result = await query(`
@@ -121,7 +119,6 @@ const getDeliveryOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get DO header
     const doResult = await query(`
       SELECT 
         d.*,
@@ -141,7 +138,6 @@ const getDeliveryOrderById = async (req, res) => {
       });
     }
 
-    // Get DO items
     const itemsResult = await query(`
       SELECT 
         di.*,
@@ -171,10 +167,9 @@ const getDeliveryOrderById = async (req, res) => {
   }
 };
 
-// @desc    Create delivery order
+// @desc    Create delivery order - UPDATED TO USE SELLING PRICE
 // @route   POST /api/delivery-orders
 // @access  Private
-
 const createDeliveryOrder = async (req, res) => {
   try {
     const {
@@ -183,10 +178,9 @@ const createDeliveryOrder = async (req, res) => {
       address,
       cnic,
       area_id,
-      items // [{ item_id, quantity, unit_price, gst_percentage }]
+      items // [{ item_id, quantity, gst_percentage }] - NO unit_price from frontend
     } = req.body;
 
-    // Validation
     if (!customer_name || !phone || !area_id || !items || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -194,7 +188,7 @@ const createDeliveryOrder = async (req, res) => {
       });
     }
 
-    // STEP 1: Check if customer exists in customers table
+    // STEP 1: Check/Create customer
     let customerId;
     
     const existingCustomer = await query(
@@ -203,10 +197,8 @@ const createDeliveryOrder = async (req, res) => {
     );
 
     if (existingCustomer.rows.length > 0) {
-      // Customer exists, use existing customer_id
       customerId = existingCustomer.rows[0].customer_id;
       
-      // Optionally update customer info if it changed
       await query(`
         UPDATE customers 
         SET name = $1, address = $2, cnic = $3, updated_at = CURRENT_TIMESTAMP
@@ -214,7 +206,6 @@ const createDeliveryOrder = async (req, res) => {
       `, [customer_name, address, cnic, customerId]);
       
     } else {
-      // STEP 2: Customer doesn't exist - CREATE NEW CUSTOMER
       const newCustomer = await query(`
         INSERT INTO customers (name, phone, address, cnic)
         VALUES ($1, $2, $3, $4)
@@ -224,7 +215,7 @@ const createDeliveryOrder = async (req, res) => {
       customerId = newCustomer.rows[0].customer_id;
     }
 
-    // Get area code for DO number
+    // Get area code
     const areaData = await query(
       'SELECT area_code FROM operational_areas WHERE area_id = $1',
       [area_id]
@@ -238,29 +229,45 @@ const createDeliveryOrder = async (req, res) => {
     }
 
     const areaCode = areaData.rows[0].area_code;
-
-    // Generate DO number
     const doNumber = await generateDONumber(areaCode);
 
-    // Calculate totals
+    // CRITICAL FIX: Fetch SELLING PRICE from database, not unit_price
     let totalAmount = 0;
-    const processedItems = items.map(item => {
-      const amount = parseFloat(item.quantity) * parseFloat(item.unit_price);
+    const processedItems = [];
+
+    for (const item of items) {
+      // Fetch selling_price from items table
+      const itemData = await query(
+        'SELECT selling_price FROM items WHERE item_id = $1',
+        [item.item_id]
+      );
+
+      if (itemData.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `Item with ID ${item.item_id} not found`
+        });
+      }
+
+      // Use SELLING PRICE for customer billing
+      const sellingPrice = parseFloat(itemData.rows[0].selling_price);
+      const amount = parseFloat(item.quantity) * sellingPrice;
       const gstAmount = amount * (parseFloat(item.gst_percentage || 0) / 100);
       const lineTotal = amount + gstAmount;
       totalAmount += lineTotal;
 
-      return {
-        ...item,
-        amount,
+      processedItems.push({
+        item_id: item.item_id,
+        quantity: item.quantity,
+        unit_price: sellingPrice, // Store selling_price as unit_price in DO
+        gst_percentage: item.gst_percentage || 0,
         gst_amount: gstAmount,
         line_total: lineTotal
-      };
-    });
+      });
+    }
 
     // Create DO in transaction
     const result = await transaction(async (client) => {
-      // Insert delivery order
       const doResult = await client.query(`
         INSERT INTO delivery_orders (
           do_number,
@@ -288,7 +295,7 @@ const createDeliveryOrder = async (req, res) => {
 
       const deliveryOrder = doResult.rows[0];
 
-      // Insert DO items
+      // Insert DO items with SELLING PRICE
       for (const item of processedItems) {
         await client.query(`
           INSERT INTO do_items (
@@ -304,8 +311,8 @@ const createDeliveryOrder = async (req, res) => {
           deliveryOrder.do_id,
           item.item_id,
           item.quantity,
-          item.unit_price,
-          item.gst_percentage || 0,
+          item.unit_price, // This is selling_price
+          item.gst_percentage,
           item.gst_amount,
           item.line_total
         ]);
@@ -316,10 +323,10 @@ const createDeliveryOrder = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Delivery order created successfully. Customer added to database.',
+      message: 'Delivery order created successfully. Prices calculated with markup.',
       data: {
         ...result,
-        customer_id: customerId // Return the customer ID for reference
+        customer_id: customerId
       }
     });
 
@@ -339,7 +346,6 @@ const markAsDelivered = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get DO details
     const doCheck = await query(`
       SELECT d.*, 
         (SELECT json_agg(di.*) FROM do_items di WHERE di.do_id = d.do_id) as items
@@ -363,7 +369,6 @@ const markAsDelivered = async (req, res) => {
       });
     }
 
-    // Process inventory deduction
     const inventoryResults = await processDOIssue(
       deliveryOrder.do_id,
       deliveryOrder.do_number,
@@ -372,7 +377,6 @@ const markAsDelivered = async (req, res) => {
       req.user.user_id
     );
 
-    // Update DO status
     await query(`
       UPDATE delivery_orders
       SET status = 'Delivered'
@@ -439,7 +443,6 @@ const deleteDeliveryOrder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if DO has invoice
     const invoiceCheck = await query(
       'SELECT invoice_id FROM invoices WHERE do_id = $1',
       [id]
@@ -452,7 +455,6 @@ const deleteDeliveryOrder = async (req, res) => {
       });
     }
 
-    // Check if delivered
     const doCheck = await query(
       'SELECT status FROM delivery_orders WHERE do_id = $1',
       [id]

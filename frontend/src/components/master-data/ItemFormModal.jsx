@@ -1,9 +1,23 @@
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import Modal from '../common/Modal';
+import { DollarSign, Percent, TrendingUp } from 'lucide-react';
 
 const ItemFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm();
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm();
+
+  // Watch unit_price and markup_percentage to calculate selling_price
+  const unitPrice = watch('unit_price', 0);
+  const markupPercentage = watch('markup_percentage', 20);
+
+  // Calculate selling price dynamically
+  const sellingPrice = unitPrice && markupPercentage 
+    ? (parseFloat(unitPrice) * (1 + parseFloat(markupPercentage) / 100)).toFixed(2)
+    : '0.00';
+
+  const profit = unitPrice && sellingPrice
+    ? (parseFloat(sellingPrice) - parseFloat(unitPrice)).toFixed(2)
+    : '0.00';
 
   useEffect(() => {
     if (isOpen) {
@@ -12,9 +26,17 @@ const ItemFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
         setValue('item_code', initialData.item_code);
         setValue('category', initialData.category);
         setValue('unit_price', initialData.unit_price);
+        setValue('markup_percentage', initialData.markup_percentage || 20);
         setValue('is_active', initialData.is_active);
       } else {
-        reset({ description: '', item_code: '', category: '', unit_price: '', is_active: true });
+        reset({ 
+          description: '', 
+          item_code: '', 
+          category: '', 
+          unit_price: '', 
+          markup_percentage: 20, // Default 20%
+          is_active: true 
+        });
       }
     }
   }, [initialData, isOpen, setValue, reset]);
@@ -46,32 +68,85 @@ const ItemFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
           {errors.item_code && <p className="text-red-500 text-xs mt-1">{errors.item_code.message}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Category</label>
-            <select 
-              {...register('category')}
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="">Select</option>
-              <option value="Spare Part">Spare Part</option>
-              <option value="Gas">Gas</option>
-              <option value="Consumable">Consumable</option>
-              <option value="Tool">Tool</option>
-            </select>
+        {/* Category */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Category</label>
+          <select 
+            {...register('category')}
+            className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="">Select</option>
+            <option value="Spare Part">Spare Part</option>
+            <option value="Gas">Gas</option>
+            <option value="Consumable">Consumable</option>
+            <option value="Tool">Tool</option>
+          </select>
+        </div>
+
+        {/* Pricing Section - Enhanced */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+          <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center">
+            <DollarSign className="w-4 h-4 mr-2" />
+            Pricing Configuration
+          </h4>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Purchase Price (Cost) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Purchase Price (Cost)
+              </label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-2 text-gray-500">Rs.</span>
+                <input 
+                  type="number"
+                  step="0.01"
+                  {...register('unit_price', { min: 0 })}
+                  className="block w-full rounded-md border border-gray-300 pl-10 pr-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">What you pay to vendor</p>
+            </div>
+
+            {/* Markup Percentage */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Markup %
+              </label>
+              <div className="relative mt-1">
+                <input 
+                  type="number"
+                  step="0.01"
+                  {...register('markup_percentage', { min: 0, max: 100 })}
+                  className="block w-full rounded-md border border-gray-300 pr-8 pl-3 py-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="20.00"
+                />
+                <Percent className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Your profit margin</p>
+            </div>
           </div>
 
-          {/* Unit Price */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Unit Price</label>
-            <input 
-              type="number"
-              step="0.01"
-              {...register('unit_price', { min: 0 })}
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              placeholder="0.00"
-            />
+          {/* Calculated Values Display */}
+          <div className="mt-4 pt-4 border-t border-blue-300 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Selling Price:</span>
+              <span className="text-lg font-bold text-green-600">
+                Rs. {sellingPrice}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">Profit per Unit:</span>
+              <span className="text-sm font-semibold text-blue-600 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" />
+                Rs. {profit}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+            💡 <strong>Tip:</strong> Standard markup is 20-25%. Adjust based on item category and market rates.
           </div>
         </div>
 

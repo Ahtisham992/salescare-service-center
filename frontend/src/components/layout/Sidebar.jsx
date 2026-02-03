@@ -1,4 +1,4 @@
-// frontend/src/components/layout/Sidebar.jsx
+// frontend/src/components/layout/Sidebar.jsx - WITH USERS LINK
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -15,9 +15,12 @@ import {
   ChevronRight,
   Truck,
   ShoppingCart,
-  Users,
-  Package2, Clock, TrendingUp,
-  Database, // <--- NEW IMPORT
+  Users as UsersIcon,
+  Package2,
+  Clock,
+  TrendingUp,
+  Database,
+  UserCog, // <--- NEW IMPORT for User Management
 } from "lucide-react";
 
 const Sidebar = ({ isOpen, closeSidebar }) => {
@@ -62,15 +65,15 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     },
     {
       name: "Complaint Aging",
-      href: "/reports/complaint-aging", // Changed 'path' to 'href'
+      href: "/reports/complaint-aging",
       icon: Clock,
-      roles: ["admin", "manager"], // Added roles (adjust as needed)
+      roles: ["admin", "manager"],
     },
     {
       name: "Stock Movement",
-      href: "/reports/stock-movement", // Changed 'path' to 'href'
+      href: "/reports/stock-movement",
       icon: TrendingUp,
-      roles: ["admin", "manager"], // Added roles (adjust as needed)
+      roles: ["admin", "manager"],
     },
     {
       name: "Inventory",
@@ -93,14 +96,20 @@ const Sidebar = ({ isOpen, closeSidebar }) => {
     {
       name: "Vendors",
       href: "/vendors",
-      icon: Users,
+      icon: UsersIcon,
       roles: ["admin", "manager"],
     },
     {
-      name: "Master Data", // <--- NEW ITEM
+      name: "Master Data",
       href: "/master-data",
       icon: Database,
       roles: ["admin", "manager"],
+    },
+    {
+      name: "Users", // <--- NEW MENU ITEM
+      href: "/users",
+      icon: UserCog,
+      roles: ["admin"], // Only admins can manage users
     },
     {
       name: "Reports",

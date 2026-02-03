@@ -96,11 +96,11 @@ const CreateDeliveryOrderModal = ({ isOpen, onClose }) => {
       item_code: item.item_code,
       description: item.description,
       quantity: 1,
-      unit_price: parseFloat(item.unit_price || 0),
+      // UPDATED: Prioritize selling_price (1200), fallback to cost_price/unit_price (1000)
+      unit_price: parseFloat(item.selling_price || item.unit_price || 0),
       gst_percentage: 18, // Default 18% GST
-      stock: item.quantity_in_hand || 0 // Used for validation
+      stock: item.quantity_in_hand || 0
     };
-
 
     setFormData(prev => ({
       ...prev,

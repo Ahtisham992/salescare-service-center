@@ -47,7 +47,7 @@ const getStockInHand = async (req, res) => {
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
+    // UPDATED QUERY: Added calculation for selling_price
     const result = await query(`
       SELECT 
         i.inventory_id,
@@ -58,7 +58,11 @@ const getStockInHand = async (req, res) => {
         it.item_code,
         it.description,
         it.category,
-        it.unit_price,
+        it.unit_price as cost_price,
+        it.markup_percentage,
+        -- Calculate Selling Price: Cost * (1 + Markup/100)
+        -- COALESCE ensures we treat null markup as 0
+        ROUND(it.unit_price * (1 + COALESCE(it.markup_percentage, 0) / 100.0), 2) as selling_price,
         oa.area_name,
         oa.area_code,
         (i.quantity_in_hand * it.unit_price) as stock_value

@@ -1,4 +1,5 @@
 // frontend/src/components/invoices/CreateComplaintInvoiceModal.jsx
+// WITH WARRANTY AWARENESS
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Modal, { ModalFooter } from '../common/Modal';
@@ -8,18 +9,54 @@ import invoiceService from '../../services/invoiceService';
 import { formatCurrency } from '../../utils/formatters';
 import { numberToWords } from '../../utils/numberToWords';
 import { toast } from 'react-hot-toast';
-import { Receipt, AlertCircle, Plus, Trash2 } from 'lucide-react';
+import { Receipt, AlertCircle, Plus, Trash2, Shield, Info } from 'lucide-react';
 
 const SERVICE_CHARGE_TYPES = [
-  { value: 'visit_charges_24h', label: 'Visit Charges (24h)', key: 'visit_charges_24h' },
-  { value: 'visit_charges_48h', label: 'Visit Charges (48h)', key: 'visit_charges_48h' },
-  { value: 'gas_charges', label: 'Gas Charges', key: 'gas_charges' },
-  { value: 'inspection_charges_csc', label: 'Inspection Charges', key: 'inspection_charges_csc' },
-  { value: 'washing_charges', label: 'Washing/Service Charges', key: 'washing_charges' },
-  { value: 'transport_charges_per_km', label: 'Transport Charges (per km)', key: 'transport_charges_per_km' },
-  { value: 'dismantling_charges', label: 'Dismantling Charges', key: 'dismantling_charges' },
-  { value: 'reinstallation_charges', label: 'Re-installation Charges', key: 'reinstallation_charges' },
+  { value: 'visit_charges_24h', label: 'Visit Charges (24h)', key: 'visit_charges_24h', isVisit: true },
+  { value: 'visit_charges_48h', label: 'Visit Charges (48h)', key: 'visit_charges_48h', isVisit: true },
+  { value: 'gas_charges', label: 'Gas Charges', key: 'gas_charges', isVisit: false },
+  { value: 'inspection_charges_csc', label: 'Inspection Charges', key: 'inspection_charges_csc', isVisit: false },
+  { value: 'washing_charges', label: 'Washing/Service Charges', key: 'washing_charges', isVisit: false },
+  { value: 'transport_charges_per_km', label: 'Transport Charges (per km)', key: 'transport_charges_per_km', isVisit: false },
+  { value: 'dismantling_charges', label: 'Dismantling Charges', key: 'dismantling_charges', isVisit: false },
+  { value: 'reinstallation_charges', label: 'Re-installation Charges', key: 'reinstallation_charges', isVisit: false },
 ];
+
+// Warranty charge rules (matching backend)
+const getWarrantyInfo = (warrantyStatus) => {
+  const info = {
+    'In Warranty': {
+      serviceCharged: false,
+      partsCharged: false,
+      visitCharged: true,
+      description: 'Service & parts FREE, visit charges apply',
+      color: 'text-green-700 bg-green-50 border-green-300'
+    },
+    'Out of Warranty': {
+      serviceCharged: true,
+      partsCharged: true,
+      visitCharged: true,
+      description: 'All charges apply',
+      color: 'text-red-700 bg-red-50 border-red-300'
+    },
+    'Contract Warranty': {
+      serviceCharged: false,
+      partsCharged: false,
+      visitCharged: true,
+      description: 'Service & parts covered by contract, visit charges apply',
+      color: 'text-blue-700 bg-blue-50 border-blue-300'
+    },
+    'Contract Paid': {
+      serviceCharged: true,
+      partsCharged: true,
+      visitCharged: true,
+      description: 'All charges apply at contract rates',
+      color: 'text-orange-700 bg-orange-50 border-orange-300'
+    }
+  };
+
+  return info[warrantyStatus] || info['Out of Warranty'];
+};
 
 const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
   const queryClient = useQueryClient();
@@ -102,24 +139,46 @@ const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
     ));
   };
 
-  // Calculate totals
+  // Get warranty info
+  const warrantyInfo = selectedComplaint 
+    ? getWarrantyInfo(selectedComplaint.warranty_status)
+    : null;
+
+  // Calculate totals with warranty rules
   const calculateTotals = () => {
     let subtotal = 0;
     let gst = 0;
 
-    // Service charge
+    if (!selectedComplaint || !warrantyInfo) return { subtotal: 0, gst: 0, discount: 0, total: 0, waiveOff: 0, netAmount: 0 };
+
+    // Service charge with warranty rules
     if (formData.service_charge_type && selectedComplaint) {
-      const chargeAmount = parseFloat(selectedComplaint[formData.service_charge_type] || 0);
+      let chargeAmount = parseFloat(selectedComplaint[formData.service_charge_type] || 0);
+      const selectedService = SERVICE_CHARGE_TYPES.find(t => t.key === formData.service_charge_type);
+      
+      // Apply warranty rules: Free if not a visit charge and service is covered
+      if (!warrantyInfo.serviceCharged && !selectedService?.isVisit) {
+        chargeAmount = 0;
+      }
+      
       subtotal += chargeAmount;
-      gst += chargeAmount * 0.18; // 18% GST on services
+      if (chargeAmount > 0) {
+        gst += chargeAmount * 0.18; // 18% GST on services
+      }
     }
 
-    // Parts from MRQS (from complaint)
-    const partsAmount = parseFloat(selectedComplaint?.parts_amount || 0);
+    // Parts from MRQS - apply warranty rules
+    let partsAmount = parseFloat(selectedComplaint?.parts_amount || 0);
+    if (!warrantyInfo.partsCharged) {
+      partsAmount = 0; // Parts are FREE under warranty
+    }
+    
     subtotal += partsAmount;
-    gst += partsAmount * 0.18;
+    if (partsAmount > 0) {
+      gst += partsAmount * 0.18;
+    }
 
-    // Custom charges
+    // Custom charges (always charged)
     customCharges.forEach(charge => {
       const amount = parseFloat(charge.amount || 0);
       subtotal += amount;
@@ -214,37 +273,61 @@ const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
             )}
           </div>
 
-          {/* Complaint Details */}
+          {/* Complaint Details & Warranty Info */}
           {selectedComplaint && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-3">Complaint Details</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">Customer:</span>
-                  <span className="ml-2 font-medium">{selectedComplaint.customer_name}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Phone:</span>
-                  <span className="ml-2 font-medium">{selectedComplaint.customer_phone}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Product:</span>
-                  <span className="ml-2 font-medium">{selectedComplaint.product_name}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Warranty:</span>
-                  <span className="ml-2 font-medium">{selectedComplaint.warranty_status}</span>
-                </div>
-                {selectedComplaint.parts_amount > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-gray-600">Parts Amount (MRQS):</span>
-                    <span className="ml-2 font-medium text-primary-600">
-                      {formatCurrency(selectedComplaint.parts_amount)}
-                    </span>
+            <>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h4 className="font-semibold text-gray-900 mb-3">Complaint Details</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Customer:</span>
+                    <span className="ml-2 font-medium">{selectedComplaint.customer_name}</span>
                   </div>
-                )}
+                  <div>
+                    <span className="text-gray-600">Product:</span>
+                    <span className="ml-2 font-medium">{selectedComplaint.product_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Serial No:</span>
+                    <span className="ml-2 font-medium">{selectedComplaint.serial_number || 'N/A'}</span>
+                  </div>
+                  {selectedComplaint.parts_amount > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Parts Amount (MRQS):</span>
+                      <span className="ml-2 font-medium text-primary-600">
+                        {formatCurrency(selectedComplaint.parts_amount)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+
+              {/* Warranty Status Alert */}
+              {warrantyInfo && (
+                <div className={`p-4 rounded-lg border-2 ${warrantyInfo.color}`}>
+                  <div className="flex items-start">
+                    <Shield className="w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="font-bold text-sm mb-1 flex items-center">
+                        Warranty Status: {selectedComplaint.warranty_status}
+                      </h4>
+                      <p className="text-xs mb-2">{warrantyInfo.description}</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="flex items-center">
+                          {warrantyInfo.serviceCharged ? '❌' : '✅'} Service Charges
+                        </div>
+                        <div className="flex items-center">
+                          {warrantyInfo.partsCharged ? '❌' : '✅'} Parts Charges
+                        </div>
+                        <div className="flex items-center">
+                          {warrantyInfo.visitCharged ? '❌' : '✅'} Visit Charges
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Service Charge Type */}
@@ -259,14 +342,30 @@ const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
               >
                 <option value="">-- Select Service Type --</option>
                 {SERVICE_CHARGE_TYPES.map(type => {
-                  const amount = selectedComplaint[type.key] || 0;
+                  let amount = selectedComplaint[type.key] || 0;
+                  
+                  // Show if warranty will waive this charge
+                  const willBeWaived = warrantyInfo && !warrantyInfo.serviceCharged && !type.isVisit;
+                  const displayAmount = willBeWaived ? 0 : amount;
+                  
                   return (
                     <option key={type.value} value={type.key}>
-                      {type.label} - {formatCurrency(amount)}
+                      {type.label} - {formatCurrency(displayAmount)}
+                      {willBeWaived ? ' (Warranty Covered)' : ''}
                     </option>
                   );
                 })}
               </select>
+              {formData.service_charge_type && warrantyInfo && (
+                <p className="mt-1 text-xs text-gray-600 flex items-start">
+                  <Info className="w-3 h-3 mr-1 mt-0.5 flex-shrink-0" />
+                  {SERVICE_CHARGE_TYPES.find(t => t.key === formData.service_charge_type)?.isVisit
+                    ? 'Visit charges are always charged regardless of warranty status'
+                    : warrantyInfo.serviceCharged 
+                      ? 'This service charge will be applied to the invoice'
+                      : 'This service charge is covered by warranty and will be FREE'}
+                </p>
+              )}
             </div>
           )}
 
@@ -283,6 +382,13 @@ const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
                 Add Charge
               </button>
             </div>
+
+            {customCharges.length > 0 && (
+              <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                <Info className="w-3 h-3 inline mr-1" />
+                Additional charges are always applied regardless of warranty status
+              </div>
+            )}
 
             {customCharges.map((charge, index) => (
               <div key={index} className="grid grid-cols-12 gap-2 mb-2">
@@ -412,6 +518,17 @@ const CreateComplaintInvoiceModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="mt-3 p-2 bg-white rounded text-xs italic text-gray-700">
                   <strong>In Words:</strong> {numberToWords(totals.netAmount)}
                 </div>
+                
+                {/* Warranty savings notice */}
+                {warrantyInfo && (!warrantyInfo.serviceCharged || !warrantyInfo.partsCharged) && (
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-700">
+                    <Shield className="w-3 h-3 inline mr-1" />
+                    Warranty coverage applied - customer saves on 
+                    {!warrantyInfo.serviceCharged && ' service charges'}
+                    {!warrantyInfo.serviceCharged && !warrantyInfo.partsCharged && ' and'}
+                    {!warrantyInfo.partsCharged && ' parts'}
+                  </div>
+                )}
               </div>
             </div>
           )}

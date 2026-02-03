@@ -1,4 +1,4 @@
-// backend/services/invoiceService.js - FIXED VERSION
+// backend/services/invoiceService.js - WITH WARRANTY LOGIC
 const { query } = require('../config/database');
 
 /**
@@ -40,9 +40,46 @@ const calculateLineItem = (quantity, ratePerUnit, gstPercentage = 0, fstPercenta
 };
 
 /**
- * Get MRQS items for a complaint to include in invoice
+ * Determine if charges should be applied based on warranty status
+ * 
+ * STANDARD INDUSTRY RULES:
+ * - Under Warranty (UW): Service FREE, Parts FREE, Visit CHARGED
+ * - Out of Warranty (OPB): Service CHARGED, Parts CHARGED, Visit CHARGED
+ * - Contract Warranty (Con W): Service FREE, Parts FREE, Visit CHARGED
+ * - Contract Paid (Con P): Service CHARGED, Parts CHARGED, Visit CHARGED
  */
-const getMRQSItemsForComplaint = async (complaintId) => {
+const getWarrantyChargeRules = (warrantyStatus) => {
+  const rules = {
+    'In Warranty': {
+      chargeService: false,  // FREE
+      chargeParts: false,    // FREE
+      chargeVisit: true      // CHARGED
+    },
+    'Out of Warranty': {
+      chargeService: true,   // CHARGED
+      chargeParts: true,     // CHARGED
+      chargeVisit: true      // CHARGED
+    },
+    'Contract Warranty': {
+      chargeService: false,  // FREE (covered by contract)
+      chargeParts: false,    // FREE (covered by contract)
+      chargeVisit: true      // CHARGED
+    },
+    'Contract Paid': {
+      chargeService: true,   // CHARGED (at contract rates)
+      chargeParts: true,     // CHARGED
+      chargeVisit: true      // CHARGED
+    }
+  };
+
+  return rules[warrantyStatus] || rules['Out of Warranty']; // Default to charging if unknown
+};
+
+/**
+ * Get MRQS items for a complaint to include in invoice
+ * Now includes warranty-based filtering
+ */
+const getMRQSItemsForComplaint = async (complaintId, warrantyStatus) => {
   const result = await query(`
     SELECT 
       mi.item_id,
@@ -59,7 +96,28 @@ const getMRQSItemsForComplaint = async (complaintId) => {
     GROUP BY mi.item_id, it.description, mi.unit_price, mi.item_status
   `, [complaintId]);
 
-  return result.rows;
+  const rules = getWarrantyChargeRules(warrantyStatus);
+  
+  // Filter items based on warranty rules
+  return result.rows.map(item => {
+    let chargeAmount = parseFloat(item.total_amount);
+    let unitPrice = parseFloat(item.unit_price);
+    
+    // Apply warranty rules
+    if (!rules.chargeParts) {
+      // Under warranty or contract warranty - parts are FREE
+      chargeAmount = 0;
+      unitPrice = 0;
+    }
+    
+    return {
+      ...item,
+      total_quantity: parseInt(item.total_quantity),
+      unit_price: unitPrice,
+      total_amount: chargeAmount,
+      warranty_waived: !rules.chargeParts // Flag to show it was waived
+    };
+  });
 };
 
 /**
@@ -81,10 +139,10 @@ const getMRTSItemsForComplaint = async (complaintId) => {
 };
 
 /**
- * Calculate net parts amount for complaint (MRQS - MRTS)
+ * Calculate net parts amount for complaint (MRQS - MRTS) with warranty rules
  */
-const calculateComplaintPartsAmount = async (complaintId) => {
-  const mrqsItems = await getMRQSItemsForComplaint(complaintId);
+const calculateComplaintPartsAmount = async (complaintId, warrantyStatus) => {
+  const mrqsItems = await getMRQSItemsForComplaint(complaintId, warrantyStatus);
   const mrtsItems = await getMRTSItemsForComplaint(complaintId);
 
   // Create a map of returned quantities
@@ -108,7 +166,8 @@ const calculateComplaintPartsAmount = async (complaintId) => {
       quantity: netQuantity,
       unit_price: parseFloat(item.unit_price),
       item_status: item.item_status,
-      amount: netAmount
+      amount: netAmount,
+      warranty_waived: item.warranty_waived
     };
   }).filter(item => item.quantity > 0); // Only include items with net positive quantity
 
@@ -121,7 +180,7 @@ const calculateComplaintPartsAmount = async (complaintId) => {
 };
 
 /**
- * Get service charges from complaint
+ * Get service charges from complaint with warranty info
  */
 const getServiceCharges = async (complaintId) => {
   const result = await query(`
@@ -147,17 +206,28 @@ const getServiceCharges = async (complaintId) => {
 };
 
 /**
- * Build complaint service invoice items - FIXED VERSION
+ * Determine if a service charge is a "visit charge"
+ */
+const isVisitCharge = (serviceChargeType) => {
+  return serviceChargeType === 'visit_charges_24h' || 
+         serviceChargeType === 'visit_charges_48h';
+};
+
+/**
+ * Build complaint service invoice items with WARRANTY LOGIC
  */
 const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null, additionalCharges = {}) => {
   const items = [];
   
-  // Get service charges
+  // Get service charges and warranty status
   const serviceData = await getServiceCharges(complaintId);
   
   if (!serviceData) {
     throw new Error('Complaint data not found');
   }
+
+  const warrantyStatus = serviceData.warranty_status;
+  const rules = getWarrantyChargeRules(warrantyStatus);
 
   // Map service charge types to readable descriptions
   const serviceDescriptions = {
@@ -171,37 +241,62 @@ const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null,
     'reinstallation_charges': 'Re-installation Charges'
   };
 
-  // Add service charge based on serviceChargeType parameter
+  // Add service charge based on serviceChargeType parameter with WARRANTY RULES
   if (serviceChargeType && serviceData[serviceChargeType]) {
-    const chargeAmount = parseFloat(serviceData[serviceChargeType]);
+    let chargeAmount = parseFloat(serviceData[serviceChargeType]);
+    const isVisit = isVisitCharge(serviceChargeType);
     
-    // Only add if amount is greater than 0
-    if (chargeAmount > 0) {
+    // Apply warranty rules for service charges
+    if (!rules.chargeService && !isVisit) {
+      // Under warranty or contract warranty - service is FREE (except visit charges)
+      chargeAmount = 0;
+    }
+    
+    // Only add if amount is greater than 0 OR if it's warranty-waived (to show as line item)
+    if (chargeAmount > 0 || (!rules.chargeService && !isVisit)) {
+      const description = serviceDescriptions[serviceChargeType] || 'Service Charges';
+      const finalDescription = chargeAmount === 0 
+        ? `${description} (Warranty Covered)` 
+        : description;
+      
       items.push({
         item_type: 'SER',
-        description: serviceDescriptions[serviceChargeType] || 'Service Charges',
+        description: finalDescription,
         quantity: 1,
         rate_per_unit: chargeAmount,
-        gst_percentage: 18, // Changed from 0 to 18 for services
-        fst_percentage: 0,  // Changed from 16 to 0
+        gst_percentage: chargeAmount > 0 ? 18 : 0,
+        fst_percentage: 0,
         discount: 0
       });
     }
   } 
   // Fallback: Use selected_service_charge if no serviceChargeType provided
   else if (serviceData.selected_service_charge && parseFloat(serviceData.selected_service_charge) > 0) {
-    items.push({
-      item_type: 'SER',
-      description: `Service Charges - ${serviceData.product_name || 'General Service'}`,
-      quantity: 1,
-      rate_per_unit: parseFloat(serviceData.selected_service_charge),
-      gst_percentage: 18,
-      fst_percentage: 0,
-      discount: 0
-    });
+    let chargeAmount = parseFloat(serviceData.selected_service_charge);
+    
+    // Apply warranty rules
+    if (!rules.chargeService) {
+      chargeAmount = 0;
+    }
+    
+    if (chargeAmount > 0 || !rules.chargeService) {
+      const description = chargeAmount === 0
+        ? `Service Charges - ${serviceData.product_name || 'General Service'} (Warranty Covered)`
+        : `Service Charges - ${serviceData.product_name || 'General Service'}`;
+      
+      items.push({
+        item_type: 'SER',
+        description: description,
+        quantity: 1,
+        rate_per_unit: chargeAmount,
+        gst_percentage: chargeAmount > 0 ? 18 : 0,
+        fst_percentage: 0,
+        discount: 0
+      });
+    }
   }
 
-  // Add custom additional charges from the additionalCharges object
+  // Add custom additional charges (these are ALWAYS charged regardless of warranty)
   if (additionalCharges && typeof additionalCharges === 'object') {
     Object.values(additionalCharges).forEach(charge => {
       if (charge.description && charge.amount && parseFloat(charge.amount) > 0) {
@@ -218,25 +313,25 @@ const buildComplaintInvoiceItems = async (complaintId, serviceChargeType = null,
     });
   }
 
-  // Get parts from MRQS (net of MRTS)
-  const partsData = await calculateComplaintPartsAmount(complaintId);
+  // Get parts from MRQS (net of MRTS) with warranty rules applied
+  const partsData = await calculateComplaintPartsAmount(complaintId, warrantyStatus);
   
   partsData.items.forEach(item => {
+    const description = item.warranty_waived && item.unit_price === 0
+      ? `${item.description} (${item.item_status}) - Warranty Covered`
+      : `${item.description} (${item.item_status})`;
+    
     items.push({
       item_type: 'PRD',
-      description: `${item.description} (${item.item_status})`,
+      description: description,
       quantity: item.quantity,
       rate_per_unit: item.unit_price,
-      gst_percentage: 18,
+      gst_percentage: item.unit_price > 0 ? 18 : 0,
       fst_percentage: 0,
       discount: 0
     });
   });
 
-  // If still no items, it means no service charges selected and no parts
-  // This is OK - could be a zero-amount invoice or manual entry needed
-  // Don't throw error here, let the controller handle it
-  
   return items;
 };
 
@@ -302,5 +397,6 @@ module.exports = {
   getServiceCharges,
   buildComplaintInvoiceItems,
   calculateInvoiceTotals,
-  formatInvoiceNumber
+  formatInvoiceNumber,
+  getWarrantyChargeRules // Export for testing/reference
 };

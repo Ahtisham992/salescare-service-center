@@ -10,14 +10,24 @@ D:.
 │   logo.svg
 │   reportWebVitals.js
 │   setupTests.js
-│   
+│
 ├───components
 │   ├───common
 │   │       ConfirmationModal.jsx
 │   │       DataTable.jsx
 │   │       LoadingSpinner.jsx
 │   │       Modal.jsx
-│   │       
+│   │
+│   ├───complaints
+│   │       AssignTechnicianModal.jsx
+│   │       ComplaintFilters.jsx
+│   │       ComplaintFormFields.jsx
+│   │       ComplaintTable.jsx
+│   │       CreateComplaintModal.jsx
+│   │       EditComplaintModal.jsx
+│   │       UpdateStatusModal.jsx
+│   │       ViewComplaintModal.jsx
+│   │
 │   ├───dashboard
 │   │       ComplaintTrendChart.jsx
 │   │       QuickStats.jsx

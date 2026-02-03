@@ -11,42 +11,28 @@ const {
   rejectMRQS,
   getAllMRTS,
   getMRTSById,
-  createMRTS
+  createMRTS,
+  getReturnableItems // ✅ Import New Controller
 } = require('../controllers/requisitionController');
 
 // ============================================
-// MRQS Routes
+// MRQS Routes (Keep existing)
 // ============================================
-
-// Get all MRQS
 router.get('/mrqs', authenticate, getAllMRQS);
-
-// Get single MRQS
 router.get('/mrqs/:id', authenticate, getMRQSById);
-
-// Create new MRQS
 router.post('/mrqs', authenticate, createMRQS);
-
-// Approve MRQS (Admin, Manager only)
 router.patch('/mrqs/:id/approve', authenticate, authorize('admin', 'manager'), approveMRQS);
-
-// Issue materials (Admin, Manager only)
 router.patch('/mrqs/:id/issue', authenticate, authorize('admin', 'manager'), issueMRQS);
-
-// Reject MRQS (Admin, Manager only)
 router.patch('/mrqs/:id/reject', authenticate, authorize('admin', 'manager'), rejectMRQS);
 
 // ============================================
 // MRTS Routes
 // ============================================
-
-// Get all MRTS
 router.get('/mrts', authenticate, getAllMRTS);
-
-// Get single MRTS
 router.get('/mrts/:id', authenticate, getMRTSById);
-
-// Create new MRTS
 router.post('/mrts', authenticate, createMRTS);
+
+// ✅ NEW ROUTE: Get items available for return for a specific complaint
+router.get('/mrts/returnable/:complaintId', authenticate, getReturnableItems);
 
 module.exports = router;

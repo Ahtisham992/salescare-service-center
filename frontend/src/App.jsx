@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - UPDATED WITH ALL ROUTES
+// frontend/src/App.jsx - UPDATED WITH USERS ROUTE
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -25,7 +25,8 @@ import GoodsReceipts from "./pages/GoodsReceipts";
 import Vendors from "./pages/Vendors";
 import MasterData from "./pages/MasterData";
 import ServiceTariffs from "./pages/ServiceTariffs";
-import OperationalAreas from "./pages/OperationalAreas"; // <--- NEW IMPORT
+import OperationalAreas from "./pages/OperationalAreas";
+import Users from "./pages/Users"; // <--- NEW IMPORT
 
 // Layout
 import MainLayout from "./components/layout/MainLayout";
@@ -200,6 +201,8 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              
+              {/* Approvals */}
               <Route
                 path="approvals"
                 element={
@@ -209,7 +212,7 @@ function App() {
                 }
               />
 
-              {/* Operational Areas - NEW ROUTE */}
+              {/* Operational Areas */}
               <Route
                 path="operational-areas"
                 element={
@@ -218,6 +221,18 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Users Management - NEW ROUTE */}
+              <Route
+                path="users"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <Users />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Reports */}
               <Route
                 path="/reports/complaint-aging"
                 element={
@@ -234,8 +249,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-
-              {/* Reports */}
               <Route
                 path="reports"
                 element={

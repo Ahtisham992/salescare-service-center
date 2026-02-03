@@ -2,6 +2,8 @@
 const bcrypt = require('bcryptjs');
 const { query } = require('../config/database');
 
+// backend/controllers/userController.js
+
 // @desc    Get all users
 // @route   GET /api/users
 // @access  Private (Admin, Manager)
@@ -13,18 +15,22 @@ const getAllUsers = async (req, res) => {
     const params = [];
     let paramCount = 1;
 
+    // 1. Filter by Role
     if (role) {
       conditions.push(`role = $${paramCount}`);
       params.push(role);
       paramCount++;
     }
 
-    if (is_active !== undefined) {
+    // 2. Filter by Active Status (Fixed Logic)
+    // Only add condition if is_active is specifically 'true' or 'false'
+    if (is_active && is_active !== '') {
       conditions.push(`is_active = $${paramCount}`);
       params.push(is_active === 'true');
       paramCount++;
     }
 
+    // 3. Search Filter
     if (search) {
       conditions.push(`(
         username ILIKE $${paramCount} OR
@@ -37,6 +43,7 @@ const getAllUsers = async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    // ✅ FIXED QUERY: Removed 'last_login' to prevent crash
     const result = await query(`
       SELECT 
         user_id,
@@ -50,14 +57,20 @@ const getAllUsers = async (req, res) => {
         updated_at
       FROM users
       ${whereClause}
-      ORDER BY full_name
+      ORDER BY user_id ASC
     `, params);
+
+    const total = result.rows.length;
 
     res.json({
       success: true,
       data: {
         users: result.rows,
-        count: result.rows.length
+        pagination: {
+          total_items: total,
+          current_page: 1,
+          total_pages: 1
+        }
       }
     });
 

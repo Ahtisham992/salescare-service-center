@@ -5,17 +5,21 @@ import requisitionService from '../services/requisitionService';
 import { useAuth } from '../context/AuthContext';
 import DataTable from '../components/common/DataTable';
 import CreateMRQSModal from '../components/requisitions/CreateMRQSModal';
-import ApproveMRQSModal from '../components/requisitions/ApproveMRQSModal'; // ← NEW IMPORT
+import ApproveMRQSModal from '../components/requisitions/ApproveMRQSModal';
+import CreateMRTSModal from '../components/requisitions/CreateMRTSModal'; // ✅ ADDED: MRTS Modal Import
 import { toast } from 'react-hot-toast';
-import { Plus, Check, X, Box, FileText, Eye } from 'lucide-react';
+import { Plus, Check, X, Box, FileText, Eye, RotateCcw } from 'lucide-react'; // ✅ ADDED: RotateCcw Icon
 import { formatDate, getStatusColor } from '../utils/formatters';
 
 const MaterialRequisitions = () => {
   const { hasRole } = useAuth();
   const queryClient = useQueryClient();
+  
+  // State
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showApproveModal, setShowApproveModal] = useState(false); // ← NEW STATE
-  const [selectedMRQS, setSelectedMRQS] = useState(null); // ← NEW STATE
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false); // ✅ ADDED: MRTS Modal State
+  const [selectedMRQS, setSelectedMRQS] = useState(null);
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
@@ -72,7 +76,7 @@ const MaterialRequisitions = () => {
       accessor: 'actions',
       render: (row) => (
         <div className="flex gap-2">
-          {/* ✅ NEW: Review/Approve Button (Admin/Manager + Pending) */}
+          {/* Review/Approve Button (Admin/Manager + Pending) */}
           {hasRole(['admin', 'manager']) && row.status === 'Pending' && (
             <button 
               onClick={() => {
@@ -120,9 +124,21 @@ const MaterialRequisitions = () => {
           <h1 className="page-title">Material Requisitions (MRQS)</h1>
           <p className="page-subtitle">Manage parts requests for complaints</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="btn btn-primary flex items-center">
-          <Plus className="w-4 h-4 mr-2" /> New MRQS
-        </button>
+        
+        {/* ✅ UPDATED: Buttons Group */}
+        <div className="flex gap-2">
+            <button 
+                onClick={() => setShowReturnModal(true)} 
+                className="btn btn-outline flex items-center bg-white hover:bg-gray-50 text-gray-700"
+            >
+                <RotateCcw className="w-4 h-4 mr-2" /> 
+                New Return (MRTS)
+            </button>
+
+            <button onClick={() => setShowCreateModal(true)} className="btn btn-primary flex items-center">
+              <Plus className="w-4 h-4 mr-2" /> New MRQS
+            </button>
+        </div>
       </div>
 
       <div className="card">
@@ -135,7 +151,7 @@ const MaterialRequisitions = () => {
         />
       </div>
 
-      {/* Create Modal */}
+      {/* Create MRQS Modal */}
       {showCreateModal && (
         <CreateMRQSModal 
           isOpen={showCreateModal} 
@@ -143,7 +159,7 @@ const MaterialRequisitions = () => {
         />
       )}
 
-      {/* ✅ NEW: Approve Modal */}
+      {/* Approve MRQS Modal */}
       {showApproveModal && selectedMRQS && (
         <ApproveMRQSModal
           isOpen={showApproveModal}
@@ -152,6 +168,14 @@ const MaterialRequisitions = () => {
             setSelectedMRQS(null);
           }}
           mrqsId={selectedMRQS.mrqs_id}
+        />
+      )}
+
+      {/* ✅ ADDED: Create MRTS Modal */}
+      {showReturnModal && (
+        <CreateMRTSModal 
+          isOpen={showReturnModal} 
+          onClose={() => setShowReturnModal(false)} 
         />
       )}
     </div>

@@ -1,7 +1,11 @@
 // ============================================
-// backend/controllers/productController.js
+// backend/controllers/productItemController.js - UPDATED WITH SELLING PRICE
 // ============================================
 const { query } = require('../config/database');
+
+// ============================================
+// PRODUCT CONTROLLER
+// ============================================
 
 // Get all products
 const getAllProducts = async (req, res) => {
@@ -161,10 +165,10 @@ const productController = {
 };
 
 // ============================================
-// backend/controllers/itemController.js
+// ITEM CONTROLLER - UPDATED WITH SELLING PRICE
 // ============================================
 
-// Get all items
+// Get all items - NOW RETURNS SELLING PRICE
 const getAllItems = async (req, res) => {
   try {
     const { category, is_active, search } = req.query;
@@ -192,7 +196,23 @@ const getAllItems = async (req, res) => {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const result = await query(`SELECT * FROM items ${whereClause} ORDER BY item_code`, params);
+    const result = await query(`
+      SELECT 
+        item_id,
+        item_code,
+        description,
+        category,
+        unit_price,
+        selling_price,
+        markup_percentage,
+        is_active,
+        created_at,
+        (selling_price - unit_price) as profit_per_unit
+      FROM items 
+      ${whereClause} 
+      ORDER BY item_code
+    `, params);
+
     res.json({ success: true, data: { items: result.rows, count: result.rows.length } });
   } catch (error) {
     console.error('Get items error:', error);
@@ -203,7 +223,14 @@ const getAllItems = async (req, res) => {
 // Get item by ID
 const getItemById = async (req, res) => {
   try {
-    const result = await query('SELECT * FROM items WHERE item_id = $1', [req.params.id]);
+    const result = await query(`
+      SELECT 
+        *,
+        (selling_price - unit_price) as profit_per_unit
+      FROM items 
+      WHERE item_id = $1
+    `, [req.params.id]);
+    
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
@@ -214,37 +241,75 @@ const getItemById = async (req, res) => {
   }
 };
 
-// Create item
+// Create item - WITH MARKUP SUPPORT
 const createItem = async (req, res) => {
   try {
-    const { item_code, description, category, unit_price } = req.body;
+    const { 
+      item_code, 
+      description, 
+      category, 
+      unit_price,
+      markup_percentage // NEW: Allow custom markup
+    } = req.body;
 
     if (!item_code || !description) {
-      return res.status(400).json({ success: false, message: 'Item code and description are required' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Item code and description are required' 
+      });
     }
 
     const existingItem = await query('SELECT item_id FROM items WHERE item_code = $1', [item_code]);
     if (existingItem.rows.length > 0) {
-      return res.status(400).json({ success: false, message: 'Item code already exists' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Item code already exists' 
+      });
     }
 
-    const result = await query(`
-      INSERT INTO items (item_code, description, category, unit_price)
-      VALUES ($1, $2, $3, $4) RETURNING *
-    `, [item_code, description, category, unit_price || 0]);
+    // Use provided markup or default to 20%
+    const finalMarkup = markup_percentage !== undefined ? markup_percentage : 20.00;
 
-    res.status(201).json({ success: true, message: 'Item created successfully', data: result.rows[0] });
+    const result = await query(`
+      INSERT INTO items (
+        item_code, 
+        description, 
+        category, 
+        unit_price,
+        markup_percentage
+      )
+      VALUES ($1, $2, $3, $4, $5) 
+      RETURNING *
+    `, [
+      item_code, 
+      description, 
+      category, 
+      unit_price || 0,
+      finalMarkup
+    ]);
+
+    res.status(201).json({ 
+      success: true, 
+      message: 'Item created successfully', 
+      data: result.rows[0] 
+    });
   } catch (error) {
     console.error('Create item error:', error);
     res.status(500).json({ success: false, message: 'Failed to create item' });
   }
 };
 
-// Update item
+// Update item - WITH MARKUP SUPPORT
 const updateItem = async (req, res) => {
   try {
     const { id } = req.params;
-    const { description, category, unit_price, is_active } = req.body;
+    const { 
+      description, 
+      category, 
+      unit_price, 
+      markup_percentage, // NEW: Allow markup updates
+      is_active 
+    } = req.body;
 
     const updates = [];
     const params = [];
@@ -268,6 +333,13 @@ const updateItem = async (req, res) => {
       paramCount++;
     }
 
+    // NEW: Support markup percentage updates
+    if (markup_percentage !== undefined) {
+      updates.push(`markup_percentage = $${paramCount}`);
+      params.push(markup_percentage);
+      paramCount++;
+    }
+
     if (is_active !== undefined) {
       updates.push(`is_active = $${paramCount}`);
       params.push(is_active);
@@ -280,14 +352,22 @@ const updateItem = async (req, res) => {
 
     params.push(id);
     const result = await query(`
-      UPDATE items SET ${updates.join(', ')} WHERE item_id = $${paramCount} RETURNING *
+      UPDATE items 
+      SET ${updates.join(', ')} 
+      WHERE item_id = $${paramCount} 
+      RETURNING *,
+        (selling_price - unit_price) as profit_per_unit
     `, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
 
-    res.json({ success: true, message: 'Item updated successfully', data: result.rows[0] });
+    res.json({ 
+      success: true, 
+      message: 'Item updated successfully', 
+      data: result.rows[0] 
+    });
   } catch (error) {
     console.error('Update item error:', error);
     res.status(500).json({ success: false, message: 'Failed to update item' });
@@ -301,7 +381,10 @@ const deleteItem = async (req, res) => {
 
     const usageCheck = await query('SELECT po_item_id FROM po_items WHERE item_id = $1 LIMIT 1', [id]);
     if (usageCheck.rows.length > 0) {
-      return res.status(400).json({ success: false, message: 'Cannot delete item with existing transactions' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot delete item with existing transactions' 
+      });
     }
 
     const result = await query('DELETE FROM items WHERE item_id = $1 RETURNING description', [id]);
@@ -309,7 +392,10 @@ const deleteItem = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Item not found' });
     }
 
-    res.json({ success: true, message: `Item ${result.rows[0].description} deleted successfully` });
+    res.json({ 
+      success: true, 
+      message: `Item ${result.rows[0].description} deleted successfully` 
+    });
   } catch (error) {
     console.error('Delete item error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete item' });
