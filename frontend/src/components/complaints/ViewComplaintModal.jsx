@@ -1,13 +1,10 @@
-
-// ============================================
-// 7. ViewComplaintModal.jsx
-// ============================================
+// frontend/src/components/complaints/ViewComplaintModal.jsx (WITH PDF SUPPORT)
 import React from 'react';
 import Modal, { ModalFooter } from '../common/Modal';
+import ComplaintReceiptPDF from './ComplaintReceiptPDF';
 import { formatDate, getStatusColor, getPriorityColor, getWarrantyColor } from '../../utils/formatters';
-import { Download } from 'lucide-react';
 
-const ViewComplaintModal = ({ isOpen, onClose, complaint, onDownload }) => {
+const ViewComplaintModal = ({ isOpen, onClose, complaint }) => {
   if (!complaint) return null;
 
   return (
@@ -149,16 +146,13 @@ const ViewComplaintModal = ({ isOpen, onClose, complaint, onDownload }) => {
       </div>
 
       <ModalFooter>
-        <button
-          onClick={() => onDownload(complaint)}
-          className="btn btn-outline flex items-center"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Download
-        </button>
-        <button onClick={onClose} className="btn btn-primary">
+        <div className="flex gap-2 flex-wrap">
+          <ComplaintReceiptPDF complaint={complaint} type="customer" />
+          <ComplaintReceiptPDF complaint={complaint} type="office" />
+        </div>
+        {/* <button onClick={onClose} className="btn btn-primary">
           Close
-        </button>
+        </button> */}
       </ModalFooter>
     </Modal>
   );

@@ -57,7 +57,8 @@ const Complaints = () => {
   if (debouncedSearch?.trim()) queryParams.search = debouncedSearch;
   if (filters.status) queryParams.status = filters.status;
   if (filters.priority) queryParams.priority = filters.priority;
-  if (filters.warranty_status) queryParams.warranty_status = filters.warranty_status;
+  if (filters.warranty_status)
+    queryParams.warranty_status = filters.warranty_status;
 
   // Fetch complaints
   const { data, isLoading } = useQuery({
@@ -79,7 +80,8 @@ const Complaints = () => {
     setDebouncedSearch("");
   };
 
-  const hasActiveFilters = filters.status || filters.priority || filters.warranty_status || searchTerm;
+  const hasActiveFilters =
+    filters.status || filters.priority || filters.warranty_status || searchTerm;
 
   const handleView = (complaint) => {
     setSelectedComplaint(complaint);
@@ -105,6 +107,7 @@ const Complaints = () => {
     // ... existing download logic
     toast.success("Complaint receipt downloaded");
   };
+  
 
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this complaint?")) {
@@ -196,7 +199,6 @@ const Complaints = () => {
           setSelectedComplaint(null);
         }}
         complaint={selectedComplaint}
-        onDownload={handleDownloadPDF}
       />
 
       <AssignTechnicianModal

@@ -379,3 +379,28 @@ CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON customers
 
 CREATE TRIGGER update_complaints_updated_at BEFORE UPDATE ON complaints
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+    -- Create notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(20) DEFAULT 'info' CHECK (type IN ('info', 'success', 'warning', 'error')),
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    reference_type VARCHAR(50),
+    reference_id INTEGER,
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+
+-- Add email to customers if not exists
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(100);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

@@ -1,6 +1,4 @@
-// ============================================
-// 5. CreateComplaintModal.jsx
-// ============================================
+// frontend/src/components/complaints/CreateComplaintModal.jsx (FIXED VERSION)
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Modal, { ModalFooter } from '../common/Modal';
@@ -8,7 +6,7 @@ import LoadingSpinner from '../common/LoadingSpinner';
 import ComplaintFormFields from './ComplaintFormFields';
 import complaintService from '../../services/complaintService';
 import toast from 'react-hot-toast';
-import { Save } from 'lucide-react';
+import { Save, Zap } from 'lucide-react';
 
 const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -22,6 +20,8 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
     priority: "Medium",
     area_id: "1",
   });
+  
+  const [autoAssigning, setAutoAssigning] = useState(false);
 
   // Fetch customers
   const { data: customersData, isLoading: customersLoading } = useQuery({
@@ -57,14 +57,61 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data) => complaintService.create(data),
-    onSuccess: () => {
-      toast.success("Complaint created successfully");
+    mutationFn: async (data) => {
+      const response = await complaintService.create(data);
+      return response;
+    },
+    onSuccess: async (response) => {
+      const complaintId = response?.data?.complaint_id || response?.data?.data?.complaint_id;
+      
+      // Auto-assign if checkbox was checked
+      if (autoAssigning && complaintId) {
+        try {
+          // Get available technician
+          const techResponse = await fetch('http://localhost:5000/api/complaints/auto-assign', {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+            },
+          });
+          
+          if (!techResponse.ok) {
+            throw new Error('Failed to get technician');
+          }
+          
+          const techResult = await techResponse.json();
+          const technicianId = techResult.data.technician.user_id;
+          const technicianName = techResult.data.technician.full_name;
+          
+          // Assign to complaint
+          const assignResponse = await fetch(`http://localhost:5000/api/complaints/${complaintId}/assign`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+            },
+            body: JSON.stringify({ technician_id: technicianId })
+          });
+          
+          if (!assignResponse.ok) {
+            throw new Error('Failed to assign technician');
+          }
+          
+          toast.success(`Complaint created and assigned to ${technicianName}`);
+        } catch (error) {
+          console.error('Auto-assign error:', error);
+          toast.success('Complaint created successfully');
+          toast.error('But failed to auto-assign technician');
+        }
+      } else {
+        toast.success("Complaint created successfully");
+      }
+      
       onSuccess?.();
       onClose();
       resetForm();
     },
     onError: (error) => {
+      console.error('Create error:', error);
       toast.error(error.response?.data?.message || "Failed to create complaint");
     },
   });
@@ -81,6 +128,7 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
       priority: "Medium",
       area_id: "1",
     });
+    setAutoAssigning(false);
   };
 
   const handleSubmit = (e) => {
@@ -109,15 +157,33 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
               <p className="text-gray-500 mt-2">Loading form data...</p>
             </div>
           ) : (
-            <ComplaintFormFields
-              formData={formData}
-              setFormData={setFormData}
-              customers={customers}
-              products={products}
-              customersLoading={customersLoading}
-              productsLoading={productsLoading}
-              isEditing={false}
-            />
+            <>
+              <ComplaintFormFields
+                formData={formData}
+                setFormData={setFormData}
+                customers={customers}
+                products={products}
+                customersLoading={customersLoading}
+                productsLoading={productsLoading}
+                isEditing={false}
+              />
+              
+              {/* Auto-assign option */}
+              <div className="border-t pt-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoAssigning}
+                    onChange={(e) => setAutoAssigning(e.target.checked)}
+                    className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700 flex items-center">
+                    <Zap className="w-4 h-4 mr-1 text-yellow-500" />
+                    Auto-assign to available technician (least workload)
+                  </span>
+                </label>
+              </div>
+            </>
           )}
         </div>
 
@@ -141,12 +207,12 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
             {createMutation.isPending ? (
               <>
                 <LoadingSpinner size="sm" className="mr-2" />
-                Creating...
+                {autoAssigning ? 'Creating & Assigning...' : 'Creating...'}
               </>
             ) : (
               <>
                 <Save className="w-4 h-4 mr-2" />
-                Create Complaint
+                {autoAssigning ? 'Create & Auto-Assign' : 'Create Complaint'}
               </>
             )}
           </button>

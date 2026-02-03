@@ -2,6 +2,13 @@
 const { query, transaction } = require('../config/database');
 const { generateComplaintNumber } = require('../utils/autoNumber');
 const { validateComplaint } = require('../utils/validators');
+const {
+  notifyComplaintRegistered,
+  notifyTechnicianAssigned,
+  notifyStatusUpdate,
+  notifyComplaintCompleted,
+  notifyTechnicianTaskAssigned
+} = require('../services/notificationService');
 
 // @desc    Get all complaints with filters and pagination
 // @route   GET /api/complaints
@@ -251,9 +258,8 @@ const getComplaintById = async (req, res) => {
   }
 };
 
-// @desc    Create new complaint
-// @route   POST /api/complaints
-// @access  Private
+
+// UPDATE THIS FUNCTION - Create complaint with notification
 const createComplaint = async (req, res) => {
   try {
     const {
@@ -279,11 +285,12 @@ const createComplaint = async (req, res) => {
       });
     }
 
-    // Verify customer exists
+    // Verify customer exists and get details
     const customerCheck = await query(
-      'SELECT customer_id FROM customers WHERE customer_id = $1',
+      'SELECT * FROM customers WHERE customer_id = $1',
       [customer_id]
     );
+
     if (customerCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
@@ -293,68 +300,24 @@ const createComplaint = async (req, res) => {
 
     // Verify product exists
     const productCheck = await query(
-      'SELECT product_id FROM products WHERE product_id = $1',
+      'SELECT product_id, product_name FROM products WHERE product_id = $1 AND is_active = true',
       [product_id]
     );
+
     if (productCheck.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: 'Product not found or inactive'
       });
     }
-
-    // Verify area exists
-    const areaCheck = await query(
-      'SELECT area_id FROM operational_areas WHERE area_id = $1',
-      [area_id]
-    );
-    if (areaCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Operational area not found'
-      });
-    }
-
-    // Get area code for complaint number
-    const areaData = await query(
-      'SELECT area_code FROM operational_areas WHERE area_id = $1',
-      [area_id]
-    );
-    const areaCode = areaData.rows[0].area_code;
 
     // Generate complaint number
-    const complaintNumber = await generateComplaintNumber(areaCode);
+    const complaint_number = await generateComplaintNumber(area_id || 1);
 
-    // Get service tariff for product
-    const tariffResult = await query(
-      'SELECT tariff_id FROM service_tariffs WHERE product_id = $1',
-      [product_id]
-    );
-    const serviceTariffId = tariffResult.rows.length > 0 ? 
-      tariffResult.rows[0].tariff_id : null;
-
-    // Create complaint in transaction
-    const result = await transaction(async (client) => {
-      const complaint = await client.query(`
-        INSERT INTO complaints (
-          complaint_number,
-          customer_id,
-          product_id,
-          area_id,
-          serial_number,
-          warranty_status,
-          purchase_date,
-          complaint_type,
-          complaint_description,
-          priority,
-          status,
-          service_tariff_id,
-          scheduled_date,
-          created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        RETURNING *
-      `, [
-        complaintNumber,
+    // Create complaint
+    const result = await query(`
+      INSERT INTO complaints (
+        complaint_number,
         customer_id,
         product_id,
         area_id,
@@ -364,33 +327,45 @@ const createComplaint = async (req, res) => {
         complaint_type,
         complaint_description,
         priority,
-        'Open',
-        serviceTariffId,
         scheduled_date,
-        req.user.user_id
-      ]);
+        status,
+        created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Open', $12)
+      RETURNING *
+    `, [
+      complaint_number,
+      customer_id,
+      product_id,
+      area_id,
+      serial_number || null,
+      warranty_status,
+      purchase_date || null,
+      complaint_type || null,
+      complaint_description,
+      priority,
+      scheduled_date || null,
+      req.user.user_id
+    ]);
 
-      return complaint.rows[0];
+    const newComplaint = result.rows[0];
+
+    // Prepare data for notification
+    const complaintData = {
+      ...newComplaint,
+      product_name: productCheck.rows[0].product_name
+    };
+
+    const customer = customerCheck.rows[0];
+
+    // Send notification to customer (async, don't wait)
+    notifyComplaintRegistered(complaintData, customer).catch(err => {
+      console.error('Notification error:', err);
     });
-
-    // Fetch complete complaint data
-    const completeComplaint = await query(`
-      SELECT 
-        c.*,
-        cust.name as customer_name,
-        p.product_name,
-        oa.area_name
-      FROM complaints c
-      JOIN customers cust ON c.customer_id = cust.customer_id
-      JOIN products p ON c.product_id = p.product_id
-      JOIN operational_areas oa ON c.area_id = oa.area_id
-      WHERE c.complaint_id = $1
-    `, [result.complaint_id]);
 
     res.status(201).json({
       success: true,
       message: 'Complaint created successfully',
-      data: completeComplaint.rows[0]
+      data: newComplaint
     });
 
   } catch (error) {
@@ -401,6 +376,230 @@ const createComplaint = async (req, res) => {
     });
   }
 };
+
+// UPDATE THIS FUNCTION - Assign technician with notification
+const assignTechnician = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { technician_id } = req.body;
+
+    if (!technician_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Technician ID is required'
+      });
+    }
+
+    // Verify technician exists and is active
+    const technician = await query(
+      'SELECT user_id, full_name, email, phone, role, is_active FROM users WHERE user_id = $1',
+      [technician_id]
+    );
+
+    if (technician.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Technician not found'
+      });
+    }
+
+    if (technician.rows[0].role !== 'technician') {
+      return res.status(400).json({
+        success: false,
+        message: 'Selected user is not a technician'
+      });
+    }
+
+    if (!technician.rows[0].is_active) {
+      return res.status(400).json({
+        success: false,
+        message: 'Technician account is inactive'
+      });
+    }
+
+    // Get complaint with customer and product details
+    const complaintCheck = await query(`
+      SELECT 
+        c.*,
+        cust.name, cust.phone, cust.email, cust.address,
+        p.product_name
+      FROM complaints c
+      JOIN customers cust ON c.customer_id = cust.customer_id
+      JOIN products p ON c.product_id = p.product_id
+      WHERE c.complaint_id = $1
+    `, [id]);
+
+    if (complaintCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+
+    const complaint = complaintCheck.rows[0];
+
+    // Update complaint
+    const result = await query(`
+      UPDATE complaints 
+      SET 
+        assigned_technician = $1,
+        status = CASE 
+          WHEN status = 'Open' THEN 'Assigned'
+          ELSE status
+        END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE complaint_id = $2
+      RETURNING *
+    `, [technician_id, id]);
+
+    const updatedComplaint = result.rows[0];
+
+    // Prepare notification data
+    const complaintData = {
+      ...updatedComplaint,
+      product_name: complaint.product_name,
+      technician_name: technician.rows[0].full_name
+    };
+
+    const customer = {
+      name: complaint.name,
+      phone: complaint.phone,
+      email: complaint.email,
+      address: complaint.address
+    };
+
+    const technicianData = technician.rows[0];
+
+    // Send notifications (async)
+    Promise.all([
+      notifyTechnicianTaskAssigned(complaintData, technicianData, customer),
+      notifyTechnicianAssigned(complaintData, customer, technicianData)
+    ]).catch(err => console.error('Notification error:', err));
+
+    res.json({
+      success: true,
+      message: `Complaint assigned to ${technician.rows[0].full_name}`,
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Assign technician error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign technician'
+    });
+  }
+};
+
+// UPDATE THIS FUNCTION - Update status with notification
+const updateStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['Open', 'Assigned', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
+
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Status must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    // Get complaint with customer details
+    const complaintCheck = await query(`
+      SELECT 
+        c.*,
+        cust.name, cust.phone, cust.email, cust.address,
+        p.product_name,
+        tech.full_name as technician_name
+      FROM complaints c
+      JOIN customers cust ON c.customer_id = cust.customer_id
+      JOIN products p ON c.product_id = p.product_id
+      LEFT JOIN users tech ON c.assigned_technician = tech.user_id
+      WHERE c.complaint_id = $1
+    `, [id]);
+
+    if (complaintCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+
+    const complaint = complaintCheck.rows[0];
+    const oldStatus = complaint.status;
+
+    // If technician, can only update their assigned complaints
+    if (req.user.role === 'technician' && 
+        complaint.assigned_technician !== req.user.user_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only update status of your assigned complaints'
+      });
+    }
+
+    // Update with completion date if status is Completed
+    const updateQuery = status === 'Completed' ? `
+      UPDATE complaints 
+      SET 
+        status = $1,
+        completion_date = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE complaint_id = $2
+      RETURNING *
+    ` : `
+      UPDATE complaints 
+      SET 
+        status = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE complaint_id = $2
+      RETURNING *
+    `;
+
+    const result = await query(updateQuery, [status, id]);
+    const updatedComplaint = result.rows[0];
+
+    // Prepare notification data
+    const complaintData = {
+      ...updatedComplaint,
+      product_name: complaint.product_name,
+      technician_name: complaint.technician_name
+    };
+
+    const customer = {
+      name: complaint.name,
+      phone: complaint.phone,
+      email: complaint.email,
+      address: complaint.address
+    };
+
+    // Send appropriate notification based on status
+    if (status === 'Completed') {
+      notifyComplaintCompleted(complaintData, customer).catch(err => {
+        console.error('Notification error:', err);
+      });
+    } else {
+      notifyStatusUpdate(complaintData, customer, oldStatus, status).catch(err => {
+        console.error('Notification error:', err);
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Complaint status updated successfully',
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Update status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update complaint status'
+    });
+  }
+};
+
 
 // @desc    Update complaint
 // @route   PUT /api/complaints/:id
@@ -513,166 +712,6 @@ const updateComplaint = async (req, res) => {
   }
 };
 
-// @desc    Assign technician to complaint
-// @route   PATCH /api/complaints/:id/assign
-// @access  Private (Admin, Manager)
-const assignTechnician = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { technician_id } = req.body;
-
-    if (!technician_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Technician ID is required'
-      });
-    }
-
-    // Verify technician exists and has correct role
-    const techCheck = await query(
-      'SELECT user_id, full_name, role, is_active FROM users WHERE user_id = $1',
-      [technician_id]
-    );
-
-    if (techCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Technician not found'
-      });
-    }
-
-    const technician = techCheck.rows[0];
-
-    if (technician.role !== 'technician') {
-      return res.status(400).json({
-        success: false,
-        message: 'Selected user is not a technician'
-      });
-    }
-
-    if (!technician.is_active) {
-      return res.status(400).json({
-        success: false,
-        message: 'Technician account is inactive'
-      });
-    }
-
-    // Check if complaint exists
-    const complaintCheck = await query(
-      'SELECT complaint_id, status FROM complaints WHERE complaint_id = $1',
-      [id]
-    );
-
-    if (complaintCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Complaint not found'
-      });
-    }
-
-    // Update complaint
-    const result = await query(`
-      UPDATE complaints 
-      SET 
-        assigned_technician = $1,
-        status = CASE 
-          WHEN status = 'Open' THEN 'Assigned'
-          ELSE status
-        END,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE complaint_id = $2
-      RETURNING *
-    `, [technician_id, id]);
-
-    res.json({
-      success: true,
-      message: `Complaint assigned to ${technician.full_name}`,
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Assign technician error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to assign technician'
-    });
-  }
-};
-
-// @desc    Update complaint status
-// @route   PATCH /api/complaints/:id/status
-// @access  Private
-const updateStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const validStatuses = ['Open', 'Assigned', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
-
-    if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Status must be one of: ${validStatuses.join(', ')}`
-      });
-    }
-
-    // Check complaint exists
-    const complaintCheck = await query(
-      'SELECT complaint_id, assigned_technician FROM complaints WHERE complaint_id = $1',
-      [id]
-    );
-
-    if (complaintCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Complaint not found'
-      });
-    }
-
-    // If technician, can only update their assigned complaints
-    if (req.user.role === 'technician' && 
-        complaintCheck.rows[0].assigned_technician !== req.user.user_id) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only update status of your assigned complaints'
-      });
-    }
-
-    // Update with completion date if status is Completed
-    const updateQuery = status === 'Completed' ? `
-      UPDATE complaints 
-      SET 
-        status = $1,
-        completion_date = CURRENT_TIMESTAMP,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE complaint_id = $2
-      RETURNING *
-    ` : `
-      UPDATE complaints 
-      SET 
-        status = $1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE complaint_id = $2
-      RETURNING *
-    `;
-
-    const result = await query(updateQuery, [status, id]);
-
-    res.json({
-      success: true,
-      message: 'Complaint status updated successfully',
-      data: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Update status error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update complaint status'
-    });
-  }
-};
-
 // @desc    Delete complaint
 // @route   DELETE /api/complaints/:id
 // @access  Private (Admin only)
@@ -776,6 +815,50 @@ const getComplaintStats = async (req, res) => {
   }
 };
 
+
+// Auto-assign technician (GET endpoint to fetch available technician)
+const autoAssignTechnician = async (req, res) => {
+  try {
+    // Get technician with least active complaints
+    const result = await query(`
+      SELECT 
+        u.user_id,
+        u.full_name,
+        u.phone,
+        COUNT(c.complaint_id) as active_complaints
+      FROM users u
+      LEFT JOIN complaints c ON u.user_id = c.assigned_technician 
+        AND c.status IN ('Assigned', 'In Progress')
+      WHERE u.role = 'technician' 
+        AND u.is_active = true
+      GROUP BY u.user_id, u.full_name, u.phone
+      ORDER BY active_complaints ASC, u.user_id ASC
+      LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No available technicians found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        technician: result.rows[0]
+      }
+    });
+  } catch (error) {
+    console.error('Auto-assign error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get available technician'
+    });
+  }
+};
+
+
 module.exports = {
   getComplaints,
   getComplaintById,
@@ -784,5 +867,6 @@ module.exports = {
   assignTechnician,
   updateStatus,
   deleteComplaint,
-  getComplaintStats
+  getComplaintStats,
+  autoAssignTechnician
 };

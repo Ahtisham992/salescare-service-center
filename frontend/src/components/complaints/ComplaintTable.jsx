@@ -141,13 +141,13 @@ const ComplaintTable = ({
             <Clock className="w-4 h-4" />
           </button>
 
-          <button
+          {/* <button
             onClick={() => onDownload(row)}
             className="p-2 text-orange-600 hover:bg-orange-50 rounded"
             title="Download"
           >
             <Download className="w-4 h-4" />
-          </button>
+          </button> */}
 
           {hasRole(["admin"]) && (
             <button

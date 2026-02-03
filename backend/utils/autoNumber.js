@@ -1,4 +1,4 @@
-// backend/utils/autoNumber.js
+// backend/utils/autoNumber.js - FIXED VERSION
 const { query } = require('../config/database');
 
 /**
@@ -6,7 +6,18 @@ const { query } = require('../config/database');
  * Format: AREA_CODE-YYYY-NNNNNN
  * Example: RWP-2025-000001
  */
-const generateComplaintNumber = async (areaCode) => {
+const generateComplaintNumber = async (areaId) => {
+  // Fetch area code from operational_areas table
+  const areaResult = await query(
+    'SELECT area_code FROM operational_areas WHERE area_id = $1',
+    [areaId]
+  );
+
+  if (areaResult.rows.length === 0) {
+    throw new Error('Area not found');
+  }
+
+  const areaCode = areaResult.rows[0].area_code;
   const year = new Date().getFullYear();
   const prefix = `${areaCode}-${year}`;
 

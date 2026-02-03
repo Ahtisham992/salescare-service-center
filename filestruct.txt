@@ -10,7 +10,7 @@ D:.
 │   logo.svg
 │   reportWebVitals.js
 │   setupTests.js
-│
+│   
 ├───components
 │   ├───common
 │   │       ConfirmationModal.jsx
@@ -22,6 +22,8 @@ D:.
 │   │       AssignTechnicianModal.jsx
 │   │       ComplaintFilters.jsx
 │   │       ComplaintFormFields.jsx
+│   │       ComplaintReceipt.jsx
+│   │       ComplaintReceiptPDF.jsx
 │   │       ComplaintTable.jsx
 │   │       CreateComplaintModal.jsx
 │   │       EditComplaintModal.jsx
@@ -70,6 +72,12 @@ D:.
 │   ├───requisitions
 │   │       ApproveMRQSModal.jsx
 │   │       CreateMRQSModal.jsx
+│   │       CreateMRTSModal.jsx
+│   │
+│   ├───users
+│   │       CreateUserModal.jsx
+│   │       EditUserModal.jsx
+│   │       ResetPasswordModal.jsx
 │   │
 │   └───vendors
 │           CreateVendorModal.jsx
@@ -96,6 +104,7 @@ D:.
 │       ServiceTariffs.jsx
 │       Settings.jsx
 │       StockMovementReport.jsx
+│       Users.jsx
 │       Vendors.jsx
 │
 ├───services
@@ -112,6 +121,7 @@ D:.
 │       reportService.js
 │       requisitionService.js
 │       tariffService.js
+│       userService.js
 │       vendorService.js
 │
 └───utils
