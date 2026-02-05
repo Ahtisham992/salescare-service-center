@@ -10,7 +10,7 @@ console.log('========================================\n');
 
 console.log('✓ dotenv loaded from:', require('path').resolve('.env'));
 console.log('\nNotification Settings:');
-console.log('- EMAIL_ENABLED:', process.env.EMAIL_ENABLED);
+console.log('- EMAIL_ENABLED:', process.env.DATABASE_URL);
 console.log('- EMAIL_USER:', process.env.EMAIL_USER);
 console.log('- EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '***' + process.env.EMAIL_PASSWORD.slice(-4) : 'NOT SET');
 console.log('- SMS_ENABLED:', process.env.SMS_ENABLED);
