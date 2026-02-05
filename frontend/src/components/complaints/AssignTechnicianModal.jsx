@@ -25,7 +25,7 @@ const AssignTechnicianModal = ({ isOpen, onClose, complaint, onSuccess }) => {
   const { data: techniciansData, isLoading: techsLoading } = useQuery({
     queryKey: ["technicians"],
     queryFn: async () => {
-      const response = await fetch("http://localhost:5000/api/users", {
+      const response = await fetch("https://salescare-service-center.onrender.com/api/users", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },

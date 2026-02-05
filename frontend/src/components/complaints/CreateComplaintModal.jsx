@@ -27,7 +27,7 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ["customers-all"],
     queryFn: async () => {
-      const response = await fetch("http://localhost:5000/api/customers?limit=1000", {
+      const response = await fetch("https://salescare-service-center.onrender.com/api/customers?limit=1000", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },
@@ -43,7 +43,7 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
   const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await fetch("http://localhost:5000/api/products", {
+      const response = await fetch("https://salescare-service-center.onrender.com/api/products", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },
@@ -68,7 +68,7 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
       if (autoAssigning && complaintId) {
         try {
           // Get available technician
-          const techResponse = await fetch('http://localhost:5000/api/complaints/auto-assign', {
+          const techResponse = await fetch('https://salescare-service-center.onrender.com/api/complaints/auto-assign', {
             headers: {
               Authorization: `Bearer ${localStorage.getItem("authToken")}`,
             },
@@ -83,7 +83,7 @@ const CreateComplaintModal = ({ isOpen, onClose, onSuccess }) => {
           const technicianName = techResult.data.technician.full_name;
           
           // Assign to complaint
-          const assignResponse = await fetch(`http://localhost:5000/api/complaints/${complaintId}/assign`, {
+          const assignResponse = await fetch(`https://salescare-service-center.onrender.com/api/complaints/${complaintId}/assign`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',

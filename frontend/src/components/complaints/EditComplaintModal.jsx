@@ -45,7 +45,7 @@ const EditComplaintModal = ({ isOpen, onClose, complaint, onSuccess }) => {
   const { data: customersData } = useQuery({
     queryKey: ["customers-all"],
     queryFn: async () => {
-      const response = await fetch("http://localhost:5000/api/customers?limit=1000", {
+      const response = await fetch("https://salescare-service-center.onrender.com/api/customers?limit=1000", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },
@@ -61,7 +61,7 @@ const EditComplaintModal = ({ isOpen, onClose, complaint, onSuccess }) => {
   const { data: productsData } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await fetch("http://localhost:5000/api/products", {
+      const response = await fetch("https://salescare-service-center.onrender.com/api/products", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },

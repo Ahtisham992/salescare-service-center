@@ -35,7 +35,7 @@ const NotificationBell = () => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/notifications', {
+      const response = await fetch('https://salescare-service-center.onrender.com/api/notifications', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('authToken')}`,
         },
@@ -53,7 +53,7 @@ const NotificationBell = () => {
 
   const markAsRead = async (notificationId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const response = await fetch(`https://salescare-service-center.onrender.com/api/notifications/${notificationId}/read`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('authToken')}`,
@@ -70,7 +70,7 @@ const NotificationBell = () => {
 
   const markAllAsRead = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/notifications/mark-all-read', {
+      const response = await fetch('https://salescare-service-center.onrender.com/api/notifications/mark-all-read', {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('authToken')}`,
@@ -87,7 +87,7 @@ const NotificationBell = () => {
 
   const deleteNotification = async (notificationId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}`, {
+      const response = await fetch(`https://salescare-service-center.onrender.com/api/notifications/${notificationId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('authToken')}`,

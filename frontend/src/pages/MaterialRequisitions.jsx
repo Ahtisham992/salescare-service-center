@@ -36,7 +36,7 @@ const MaterialRequisitions = () => {
     queryKey: ['mrts-list', page],
     queryFn: async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/requisitions/mrts?page=${page}&limit=10`, {
+        const response = await fetch(`https://salescare-service-center.onrender.com/api/requisitions/mrts?page=${page}&limit=10`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("authToken")}`,
           },
@@ -75,7 +75,7 @@ const MaterialRequisitions = () => {
   // View MRTS Details
   const handleViewMRTS = async (mrts) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/requisitions/mrts/${mrts.mrts_id}`, {
+      const response = await fetch(`https://salescare-service-center.onrender.com/api/requisitions/mrts/${mrts.mrts_id}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },
