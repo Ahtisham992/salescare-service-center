@@ -1,4 +1,4 @@
-// backend/controllers/inventoryController.js
+// backend/controllers/inventoryController.js - FIXED VERSION
 const { query } = require('../config/database');
 const { getCurrentStock, getInventoryValuation } = require('../services/inventoryService');
 
@@ -47,7 +47,8 @@ const getStockInHand = async (req, res) => {
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    // UPDATED QUERY: Added calculation for selling_price
+    
+    // FIXED QUERY: Now properly returns all pricing fields
     const result = await query(`
       SELECT 
         i.inventory_id,
@@ -58,14 +59,20 @@ const getStockInHand = async (req, res) => {
         it.item_code,
         it.description,
         it.category,
-        it.unit_price as cost_price,
-        it.markup_percentage,
-        -- Calculate Selling Price: Cost * (1 + Markup/100)
-        -- COALESCE ensures we treat null markup as 0
-        ROUND(it.unit_price * (1 + COALESCE(it.markup_percentage, 0) / 100.0), 2) as selling_price,
+        -- Cost/Purchase Price
+        it.unit_price,
+        -- Selling Price & Markup
+        COALESCE(it.selling_price, 0) as selling_price,
+        COALESCE(it.markup_percentage, 0) as markup_percentage,
+        -- Calculated fields
+        (COALESCE(it.selling_price, 0) - it.unit_price) as profit_per_unit,
+        -- Stock Value (using cost price)
+        (i.quantity_in_hand * it.unit_price) as stock_value,
+        -- Potential Revenue (using selling price)
+        (i.quantity_in_hand * COALESCE(it.selling_price, 0)) as potential_revenue,
+        -- Area info
         oa.area_name,
-        oa.area_code,
-        (i.quantity_in_hand * it.unit_price) as stock_value
+        oa.area_code
       FROM inventory i
       JOIN items it ON i.item_id = it.item_id
       JOIN operational_areas oa ON i.area_id = oa.area_id
@@ -76,8 +83,12 @@ const getStockInHand = async (req, res) => {
     // Calculate totals
     const totals = {
       total_items: result.rows.length,
-      total_quantity: result.rows.reduce((sum, row) => sum + parseInt(row.quantity_in_hand), 0),
-      total_value: result.rows.reduce((sum, row) => sum + parseFloat(row.stock_value), 0)
+      total_quantity: result.rows.reduce((sum, row) => sum + parseInt(row.quantity_in_hand || 0), 0),
+      total_value: result.rows.reduce((sum, row) => sum + parseFloat(row.stock_value || 0), 0),
+      potential_revenue: result.rows.reduce((sum, row) => sum + parseFloat(row.potential_revenue || 0), 0),
+      total_profit: result.rows.reduce((sum, row) => 
+        sum + (parseInt(row.quantity_in_hand || 0) * parseFloat(row.profit_per_unit || 0)), 0
+      )
     };
 
     res.json({
@@ -292,6 +303,7 @@ const getLowStock = async (req, res) => {
         it.description,
         it.category,
         it.unit_price,
+        COALESCE(it.selling_price, 0) as selling_price,
         oa.area_name
       FROM inventory i
       JOIN items it ON i.item_id = it.item_id
