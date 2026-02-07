@@ -2,6 +2,8 @@
 
 A comprehensive ERP system for managing service center operations including complaints, inventory, invoicing, and material requisitions.
 
+live Demo : https://salescare.netlify.app/
+
 ## 📋 Table of Contents
 
 - [Overview](#overview)
