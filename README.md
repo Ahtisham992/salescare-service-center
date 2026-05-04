@@ -819,8 +819,7 @@ This project is proprietary software. All rights reserved.
 ## 📞 Support
 
 For issues, questions, or contributions:
-- Email: support@salescare.com
-- GitHub Issues: [Repository URL]
+- GitHub Issues: [[Repository URL](https://github.com/Ahtisham992/salescare-service-center)]
 
 ---
 
