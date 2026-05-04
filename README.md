@@ -831,8 +831,8 @@ For issues, questions, or contributions:
 - ✅ Authentication system
 - ✅ User management
 - ✅ Basic CRUD operations
-- 🔄 Frontend (In Progress)
-- 🔄 Complete complaint module (In Progress)
+- ✅ Frontend 
+- ✅ Complete complaint module 
 
 ---
 
